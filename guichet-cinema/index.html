@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>LUDOVIC LI - The Box Office - Cinema Portfolio</title>
+<meta name="description" content="Interactive 3D cinema portfolio by Ludovic LI, Creative Developer. The box office: six tickets on the counter - pick one up, spin it, stamp it to reveal each film-project in 3D." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
+<!-- bump ?v= whenever styles.css / app.js changes, to force a reload (Chrome cache over file://) -->
+<link rel="stylesheet" href="styles.css?v=48" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'>G</text></svg>" />
+</head>
+<body data-loading="true">
+
+<!-- ========== BOOT / LOADER ========== -->
+<div id="loader" aria-hidden="true">
+  <div class="loader-frame">
+    <div class="loader-top"><span>BOX OFFICE CLOSED</span><span>OPENING - 16 MM</span></div>
+    <div class="loader-count" id="loaderCount">3</div>
+    <div class="loader-cross"></div>
+    <div class="loader-bottom"><span>LUDOVIC LI</span><span id="loaderPct">0%</span></div>
+  </div>
+</div>
+
+<!-- ========== 3D SCENE (Three.js) ========== -->
+<canvas id="stage" aria-label="Interactive cinema box office"></canvas>
+
+<div id="noWebgl" hidden>
+  <h2>Your browser can't render 3D.</h2>
+  <p>The box office needs WebGL - but the six cards are still readable here.</p>
+  <div id="noWebglList"></div>
+  <p><a href="#contact">Write to Ludovic, at the till -></a></p>
+</div>
+
+<!-- ========== CINEMA DRESSING ========== -->
+<div class="site-sweep" aria-hidden="true"></div>
+<canvas id="grain" aria-hidden="true"></canvas>
+<div class="cine-bar cine-bar--top" aria-hidden="true"></div>
+<div class="cine-bar cine-bar--bottom" aria-hidden="true"></div>
+
+<!-- ========== HEADER ========== -->
+<header id="siteHeader">
+  <a class="brand" href="#top" data-hover="HOME">
+    <span class="brand-mark">LL</span>
+    <span class="brand-text">LUDOVIC LI <em>(c)2026</em></span>
+  </a>
+  <div class="header-tc" aria-hidden="true">
+    <span class="rec-dot"></span>
+    <span id="timecode">00:00:00:00</span>
+    <span class="tc-label">REC - 24 FPS</span>
+  </div>
+  <nav class="main-nav">
+    <a href="#top" data-hover="GO">BOX OFFICE</a>
+    <a href="#about" data-hover="SEE">ABOUT</a>
+    <a href="#contact" class="ticket-mini" data-hover="GO">CONTACT TICKET</a>
+    <button id="soundBtn" class="sound-btn" aria-pressed="true" aria-label="Mute sound">SOUND ON</button>
+    <button id="menuBtn" aria-label="Menu">MENU</button>
+  </nav>
+</header>
+
+<!-- mobile menu -->
+<div id="mobileMenu" aria-hidden="true">
+  <button id="menuClose" aria-label="Close">X</button>
+  <a href="#top">THE BOX OFFICE</a>
+  <a href="#about">ABOUT</a>
+  <a href="#contact">CONTACT</a>
+  <p>CREATIVE DEVELOPER - CODE x REALTIME x CINEMA</p>
+</div>
+
+<main id="top">
+
+  <!-- ========== HERO - THE BOX OFFICE ========== -->
+  <section class="hero" id="hero">
+    <div class="hero-top">
+      <p class="kicker reveal"><span class="kicker-dot"></span> LUDOVIC CINEMA - BOX OFFICE No.1 - SEASON 2025/2026</p>
+    </div>
+  </section>
+
+  <!-- ========== ABOUT ========== -->
+  <section id="about" class="about panel">
+    <div class="section-head reveal" data-split>
+      <p class="section-index">01 - THE PROJECTIONIST</p>
+      <h2>ABOUT <em>LUDOVIC</em></h2>
+      <p class="section-sub">A creative developer, cinema-addicted: realtime code, sensors and images, cut like a film.</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-bio reveal">
+        <p class="dropcap">I'm <strong>Ludovic LI</strong> - I build fast, I test on real hardware, I film everything. My playground: where <strong>code and electronics</strong> meet <strong>cinematic storytelling</strong>.</p>
+        <p>Social robotics <b>(TeruBot)</b>, immersive well-being <b>(BreathIN)</b>, a crowdfunded product <b>(Kapsul)</b>, computer vision and gestures <b>(KeyMotion, Neural Vision)</b>, minimalist apps <b>(WeatherApp)</b>: I love going from sensor to pixel, from KiCad PCB to shader.</p>
+        <div class="about-badges">
+          <span>* OPEN TO INTERNSHIP / PROJECT</span><span>* BASED: FRANCE - REMOTE OK</span><span>* FR / EN</span>
+        </div>
+        <div class="about-links">
+          <a class="btn btn--small magnetic" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">* GITHUB.COM/LVDOO</a>
+          <a class="btn btn--small btn--ghost magnetic" href="#contact" data-hover="GO">GET IN TOUCH -></a>
+        </div>
+      </div>
+      <div class="about-skills reveal">
+        <h3>SKILLS - CREDITS</h3>
+        <ul class="skill-list">
+          <li><span>Code / Prototyping</span><i style="--v:90%"><b data-count="90">0</b></i></li>
+          <li><span>Python / Scripting</span><i style="--v:85%"><b data-count="85">0</b></i></li>
+          <li><span>Image / 3D / Edit</span><i style="--v:82%"><b data-count="82">0</b></i></li>
+          <li><span>Unity / C# / Realtime</span><i style="--v:80%"><b data-count="80">0</b></i></li>
+          <li><span>Web / JS / Three.js</span><i style="--v:78%"><b data-count="78">0</b></i></li>
+          <li><span>Electronics / KiCad</span><i style="--v:70%"><b data-count="70">0</b></i></li>
+        </ul>
+        <div class="chips">
+          <span>Python</span><span>C#</span><span>Unity 6</span><span>Three.js</span><span>JS / HTML / CSS</span><span>MediaPipe</span><span>OpenCV</span><span>Tkinter</span><span>Arduino</span><span>KiCad</span><span>Blender</span><span>Git</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CONTACT / TILL ========== -->
+  <section id="contact" class="contact panel">
+    <div class="section-head reveal" data-split>
+      <p class="section-index">02 - THE TILL</p>
+      <h2>GET <em>YOUR TICKET</em></h2>
+      <p class="section-sub">An internship, a project, an interactive short film? Book your seat at the till.</p>
+    </div>
+    <div class="ticket reveal" id="ticket">
+      <div class="ticket-left">
+        <p class="ticket-brand">LL PICTURES - TILL No.1</p>
+        <h3>ADMIT ONE</h3>
+        <p class="ticket-num">No. 004 - ROW CODE - SEAT CINE</p>
+        <div class="ticket-meta">
+          <div><label>WRITE TO</label><strong id="ticketEmail">ludovicli27@outlook.fr</strong></div>
+          <div><label>GITHUB</label><strong><a href="https://github.com/Lvdoo" target="_blank" rel="noopener">github.com/Lvdoo</a></strong></div>
+        </div>
+      </div>
+      <div class="ticket-perfo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="ticket-right">
+        <p>SCAN - WRITE</p>
+        <a class="btn magnetic" id="mailBtn" href="mailto:ludovicli27@outlook.fr?subject=Project%20x%20Ludo%20-%20The%20Box%20Office" data-hover="SEND">EMAIL -></a>
+        <a class="btn btn--ghost magnetic" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">GITHUB -></a>
+        <div class="ticket-qr" aria-hidden="true">LUDOVIC<br>*****<br>2026</div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="footer-top">
+        <span>LL - THE BOX OFFICE</span><span>BOX OFFICE - ABOUT - CONTACT</span><span>(c) 2026 LUDOVIC LI</span>
+      </div>
+      <p class="footer-credits">LUDOVIC LI - CODE, COMPUTER VISION, REALTIME 3D, ELECTRONICS - SCROLL THE TICKETS, STAMP THE FILM - THE END.</p>
+    </footer>
+  </section>
+</main>
+
+<!-- ========== STAMP BAR (current ticket) ========== -->
+<div id="ticketBar" aria-hidden="true">
+  <div class="stamp-meta">
+    <span class="stamp-title" id="stampTitle">TERUBOT</span>
+    <span class="stamp-count" id="stampCounter">STAMPED <b>0</b>/6</span>
+  </div>
+  <button id="stampBtn" class="btn btn--stamp" data-hover="STAMP">* STAMP</button>
+</div>
+
+<!-- ========== FILM CARD (THE FILM) ========== -->
+<div id="detail" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Film card">
+  <div class="detail-backdrop" data-close></div>
+  <article class="detail-sheet" id="detailSheet">
+    <div class="detail-top">
+      <span id="dRoom">ROOM 01 * SCREENING</span>
+      <span class="detail-stamp" aria-hidden="true">ADMITTED</span>
+    </div>
+    <div class="detail-scroll" id="detailScroll">
+      <header class="detail-poster">
+        <p class="detail-kicker" id="dKicker"></p>
+        <h3 id="dTitle"></h3>
+        <p class="detail-domain" id="dDomain"></p>
+        <p class="detail-tagline" id="dTagline"></p>
+      </header>
+      <div class="detail-media" id="dMedia"></div>
+      <p class="detail-headline" id="dHeadline"></p>
+      <div class="detail-meta" id="dMeta"></div>
+      <div class="detail-body" id="dBody"></div>
+    </div>
+  </article>
+</div>
+
+<noscript><p style="padding:80px 20px;text-align:center">This portfolio needs JavaScript. The project cards stay readable in the source code.</p></noscript>
+
+<!-- Three.js (UMD build: works even on double-click, no server) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="app.js?v=48"></script>
+</body>
+</html>
+
