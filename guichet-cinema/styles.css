@@ -138,10 +138,10 @@ section{padding:80px clamp(18px,5vw,70px);position:relative}
 
 /* -- about -- */
 .about{background:#0e0e10;border-top:1px solid var(--line)}
-.about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:34px;margin-top:30px}
+.about-grid{display:grid;grid-template-columns:1.35fr .95fr;gap:34px;align-items:start}
+.about-bio{margin-top:30px}
 .about-bio p{line-height:1.75;color:var(--creme-dim);margin-bottom:16px;font-size:15.5px}
 .about-bio p strong,.about-bio b{color:var(--creme)}
-.dropcap::first-letter{font-family:var(--font-display);font-size:52px;float:left;line-height:.85;margin:4px 10px 0 0;color:var(--rouge)}
 .about-badges{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
 .about-badges span{font-size:11px;letter-spacing:.14em;border:1px solid var(--line);padding:8px 12px;color:var(--gold)}
 .about-links{display:flex;gap:12px;flex-wrap:wrap}
@@ -364,4 +364,50 @@ body:not(.hand) .stamp-title{color:var(--gold)}
 .panel .ticket-right .btn:hover{background:var(--rouge);border-color:var(--rouge);color:#fff}
 /* encadre " credits " : pointille, comme les separations du billet */
 .panel .about-skills{background:var(--noir2);border:1px dashed rgba(46,37,24,.35)}
+/* =============================================================
+   PAS DE SCROLL DANS LES PANNEAUX
+   Tout doit tenir entre les deux bandes noires. Les tailles sont
+   indexees sur la HAUTEUR de la fenetre (vh) : plancher pour les
+   petits ecrans, plafond = la taille pleine echelle d'origine pour
+   les grands. Sur un ecran court tout se resserre au lieu de
+   defiler ; le reste d'espace est reparti haut/bas (donc jamais de
+   grand vide en bas). overflow:auto ne sert plus que de secours
+   pour les fenetres vraiment minuscules.
+   ============================================================= */
+.panel-top{padding:clamp(9px,1.5vh,20px) clamp(18px,4vw,54px)}
+.panel-stamp{width:clamp(42px,5.6vh,54px);height:clamp(42px,5.6vh,54px);font-size:clamp(8px,1.1vh,10px)}
+.panel-body{display:flex;flex-direction:column;
+  padding:clamp(13px,2.4vh,42px) clamp(18px,4vw,54px) clamp(14px,3vh,56px)}
+.panel-body > :first-child{margin-top:auto}
+.panel-body > :last-child{margin-bottom:auto}
+.panel .section-head h2{font-size:clamp(30px,min(6.5vw,8.2vh),86px)}
+.panel .section-sub{margin-top:clamp(6px,1vh,12px);font-size:clamp(13px,1.7vh,15px);line-height:1.45}
+.panel .about-grid{gap:clamp(16px,2.6vh,34px)}
+.panel .about-bio{margin-top:clamp(12px,2vh,30px)}
+.panel .about-bio p{font-size:clamp(13px,1.75vh,15.5px);line-height:1.6;margin-bottom:clamp(7px,1.3vh,16px)}
+.panel .about-badges{margin:clamp(7px,1.3vh,18px) 0}
+.panel .about-badges span{padding:clamp(4px,.9vh,8px) 11px;font-size:clamp(10px,1.3vh,11px)}
+.panel .btn--small{padding:clamp(7px,1.15vh,11px) 15px;font-size:clamp(11px,1.3vh,12px)}
+.panel .about-skills{padding:clamp(12px,2vh,24px)}
+.panel .about-skills h3{font-size:clamp(15px,2vh,18px);margin-bottom:clamp(7px,1.2vh,16px)}
+.panel .skill-list{gap:clamp(5px,1vh,12px)}
+.panel .skill-list li{font-size:clamp(11.5px,1.5vh,13px);gap:clamp(3px,.6vh,6px)}
+.panel .skill-list i{height:clamp(5px,.85vh,8px)}
+.panel .skill-list b{font-size:clamp(10px,1.2vh,11px);top:clamp(-15px,-2vh,-12px)}
+.panel .chips{margin-top:clamp(8px,1.3vh,18px);gap:6px}
+.panel .chips span{padding:clamp(4px,.8vh,7px) 10px;font-size:clamp(10.5px,1.4vh,12px)}
+.panel .ticket{margin-top:clamp(14px,2.2vh,30px)}
+.panel .ticket-left,.panel .ticket-right{padding:clamp(16px,2.2vh,30px)}
+.panel .ticket-left h3{font-size:clamp(32px,min(7vw,8.2vh),84px)}
+.panel .ticket-num{margin:clamp(4px,.7vh,8px) 0 clamp(8px,1.4vh,18px)}
+.panel .ticket-meta{gap:clamp(8px,1.2vh,14px);padding-top:clamp(10px,1.5vh,16px)}
+.panel .ticket-right{gap:clamp(8px,1.2vh,14px)}
+.panel .ticket-qr{padding:clamp(8px,1.3vh,14px)}
+.panel .footer{padding:clamp(14px,2vh,30px) 0 clamp(16px,2.8vh,44px)}
+/* fenetre etroite : les colonnes s'empilent, donc les barres de
+   competences passent sur 2 colonnes pour tenir aussi sans scroll */
+@media(max-width:1000px){
+  .panel .skill-list{display:grid;grid-template-columns:1fr 1fr;
+    gap:clamp(8px,1.4vh,14px) clamp(14px,3vw,28px)}
+}
 body.panel-open{cursor:default}

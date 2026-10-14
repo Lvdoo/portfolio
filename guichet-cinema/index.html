@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
 <!-- bump ?v= whenever styles.css / app.js changes, to force a reload (Chrome cache over file://) -->
-<link rel="stylesheet" href="styles.css?v=51" />
+<link rel="stylesheet" href="styles.css?v=55" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'>G</text></svg>" />
 </head>
 <body data-loading="true">
@@ -86,14 +86,15 @@
       <span class="panel-stamp" aria-hidden="true">CREW</span>
     </div>
     <div class="panel-body">
-    <div class="section-head reveal" data-split>
-      <p class="section-index">01 - THE PROJECTIONIST</p>
-      <h2>ABOUT <em>LUDOVIC</em></h2>
-      <p class="section-sub">A creative developer, cinema-addicted: realtime code, sensors and images, cut like a film.</p>
-    </div>
     <div class="about-grid">
+      <div class="about-main">
+      <div class="section-head reveal" data-split>
+        <p class="section-index">01 - THE PROJECTIONIST</p>
+        <h2>ABOUT <em>LUDOVIC</em></h2>
+        <p class="section-sub">A creative developer, cinema-addicted: realtime code, sensors and images, cut like a film.</p>
+      </div>
       <div class="about-bio reveal">
-        <p class="dropcap">I'm <strong>Ludovic LI</strong> - I build fast, I test on real hardware, I film everything. My playground: where <strong>code and electronics</strong> meet <strong>cinematic storytelling</strong>.</p>
+        <p>I'm <strong>Ludovic LI</strong> - I build fast, I test on real hardware, I film everything. My playground: where <strong>code and electronics</strong> meet <strong>cinematic storytelling</strong>.</p>
         <p>Social robotics <b>(TeruBot)</b>, immersive well-being <b>(BreathIN)</b>, a crowdfunded product <b>(Kapsul)</b>, computer vision and gestures <b>(KeyMotion, Neural Vision)</b>, minimalist apps <b>(WeatherApp)</b>: I love going from sensor to pixel, from KiCad PCB to shader.</p>
         <div class="about-badges">
           <span>* OPEN TO INTERNSHIP / PROJECT</span><span>* BASED: FRANCE - REMOTE OK</span><span>* FR / EN</span>
@@ -103,6 +104,7 @@
           <a class="btn btn--small btn--ghost magnetic" href="#contact" data-hover="GO">GET IN TOUCH -></a>
         </div>
       </div>
+      </div>
       <div class="about-skills reveal">
         <h3>SKILLS - CREDITS</h3>
         <ul class="skill-list">
@@ -110,11 +112,11 @@
           <li><span>Python / Scripting</span><i style="--v:85%"><b data-count="85">0</b></i></li>
           <li><span>Image / 3D / Edit</span><i style="--v:82%"><b data-count="82">0</b></i></li>
           <li><span>Unity / C# / Realtime</span><i style="--v:80%"><b data-count="80">0</b></i></li>
-          <li><span>Web / JS / Three.js</span><i style="--v:78%"><b data-count="78">0</b></i></li>
+          <li><span>Web / JS</span><i style="--v:78%"><b data-count="78">0</b></i></li>
           <li><span>Electronics / KiCad</span><i style="--v:70%"><b data-count="70">0</b></i></li>
         </ul>
         <div class="chips">
-          <span>Python</span><span>C#</span><span>Unity 6</span><span>Three.js</span><span>JS / HTML / CSS</span><span>MediaPipe</span><span>OpenCV</span><span>Tkinter</span><span>Arduino</span><span>KiCad</span><span>Blender</span><span>Git</span>
+          <span>Python</span><span>C#</span><span>Unity 6</span><span>JS / HTML / CSS</span><span>MediaPipe</span><span>OpenCV</span><span>Tkinter</span><span>Arduino</span><span>KiCad</span><span>Git</span>
         </div>
       </div>
     </div>
@@ -198,7 +200,7 @@
 
 <!-- Three.js (UMD build: works even on double-click, no server) -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=55"></script>
 </body>
 </html>
 
