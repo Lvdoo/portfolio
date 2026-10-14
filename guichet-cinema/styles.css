@@ -130,8 +130,10 @@ body:not([data-loading="true"]) #loader{opacity:0;visibility:hidden}
 section{padding:80px clamp(18px,5vw,70px);position:relative}
 .section-index{font-size:12px;letter-spacing:.3em;color:var(--rouge);margin-bottom:10px;font-weight:700}
 .section-head h2{font-family:var(--font-display);font-size:clamp(38px,6.5vw,86px);line-height:.95;text-transform:uppercase}
-.section-head h2 em{font-family:var(--font-quote);text-transform:none;font-style:italic;color:var(--gold);font-weight:500}
-.section-head h2 span{font-size:.35em;vertical-align:middle;color:var(--creme-dim);letter-spacing:.1em}
+/* mot accentue : MEME police / graisse / casse que le reste du titre, aligne sur la ligne */
+.section-head h2 em{font-family:inherit;font-style:normal;font-weight:inherit;text-transform:inherit;color:var(--gold)}
+/* ce style vise un <span> decoratif du titre - on exclut les mots du reveal (.w / .wi) */
+.section-head h2 span:not(.w):not(.wi){font-size:.35em;vertical-align:middle;color:var(--creme-dim);letter-spacing:.1em}
 .section-sub{max-width:660px;color:var(--creme-dim);margin-top:12px;line-height:1.6}
 
 /* -- about -- */
