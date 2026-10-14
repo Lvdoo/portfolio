@@ -23,7 +23,7 @@ The site fits on **a single screen**. **Scrolling anywhere** picks the top ticke
 - **On a pinned ticket** → hover to lift it, click to **reopen its "film" card** (stamped tickets stay visible and reachable at all times).
 - **The "film" card shares the ticket's art direction**: aged ivory paper, sepia ink, Playfair letterpress title, gold photo frame and dashed perforation rules, with the **accent band of that project** down the left (faded band on the right) — the card reads as the same printing as the ticket.
 - **The card's top bar (stamp + ROOM / SCREENING) stays fixed** while the poster scrolls under it. Close the card by **clicking outside** it or with `Esc` (or browse with `←` / `→`).
-- **Menu (About · Contact)** → opens the section as a **full-screen panel**; `Esc` (or the header's **BOX OFFICE** link) closes it.
+- **Menu (About · Contact)** → opens the section as a **full-screen sheet printed like a ticket** (cream paper, sepia ink, gold accents, accent band down the left, fixed top bar with stamp + ROOM); `Esc` (or the header's **BOX OFFICE** link) closes it.
 - `Esc` → close the panel, otherwise the film card, otherwise put the ticket back down on the pile.
 
 ---

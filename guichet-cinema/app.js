@@ -2099,6 +2099,7 @@ function openPanelById(id){
   if(openPanel && openPanel !== el) openPanel.classList.remove("open");
   openPanel = el;
   el.scrollTop = 0;
+  const body = el.querySelector(".panel-body"); if(body) body.scrollTop = 0;
   el.classList.add("open");
   document.body.classList.add("panel-open");
   $$(".reveal", el).forEach(r => r.classList.add("in"));   // contenu deja revele
