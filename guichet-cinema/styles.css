@@ -522,10 +522,15 @@ a,button,summary{touch-action:manipulation}
   .dnav-btn:not(.dnav-close){padding-inline:15px;margin-inline:-15px}
 }
 
-/* un seul en-tete doit rester compact pour que les 2 lignes de la barre tiennent */
+/* petits ecrans : un en-tete sur une seule ligne (le corps du billet garde le reste) */
 @media(max-width:480px){
   .detail-top,.panel-top{gap:9px 10px;font-size:10px;letter-spacing:.15em}
-  .detail-stamp,.panel-stamp{width:44px;height:44px}
+  /* le tampon decoratif est le plus large du rang : il passe a la ligne et fait
+     grimper l'en-tete de ~45px. Il est purement decoratif (aria-hidden), on le retire. */
+  .detail-stamp,.panel-stamp{display:none}
+  /* le libelle de salle tient sur la ligne des fleches mais pas avec FERMER :
+     la fiche affiche deja ROOM dans ses credits. */
+  #dRoom{display:none}
 }
 
 /* ecrans courts (portable, paysage telephone) : la barre du tampon passe
