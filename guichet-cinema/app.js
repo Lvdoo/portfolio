@@ -190,6 +190,7 @@ const snd = (() => {
     stamp(){ tone(80,.25,"sine",.16,55); noise(.16,.12,720); },
     put(){ tone(540,.16,"sine",.05,300); },
     open(){ tone(420,.22,"sine",.05,980); },
+    bell(){ tone(1180,.45,"sine",.05,1560); tone(1760,.35,"triangle",.028); },   // la cloche du guichet
   };
 })();
 
@@ -198,6 +199,7 @@ const stage = $("#stage"), grain = $("#grain");
 const loaderCount = $("#loaderCount"), loaderPct = $("#loaderPct");
 const hint = $("#guichetHint"), ticketBar = $("#ticketBar");
 const stampTitle = $("#stampTitle"), stampCounter = $("#stampCounter"), stampBtn = $("#stampBtn");
+const bellHint = $("#bellHint");
 const detail = $("#detail"), detailSheet = $("#detailSheet"), detailScroll = $("#detailScroll"), noWebgl = $("#noWebgl");
 
 /* ================== Medias (prechargement) ================== */
@@ -780,7 +782,8 @@ let boothCurtains = [];                       // rideaux : SEULS elements replac
 let boothPosters  = [];                       // affiches anglaises : mur du fond, MEME PLAN que le panneau des billets (fixes)
 let boothClockHands = null;                   // aiguilles de l'horloge de la cabine (reglees sur l'heure locale)
 let boothClock = null;                        // groupe de l'horloge (repositionne a gauche de la plaque BOX OFFICE)
-let boothCesar = null;                        // statuette facon Cesar posee sur le comptoir (repositionnee a droite de l'affiche rouge)
+let boothCesar = null;                        // statuette CESAR posee sur le comptoir (repositionnee a droite de l'affiche rouge)
+let boothOscar = null;                        // statuette OSCAR posee juste a cote du Cesar, sur le comptoir
 let boothWinOuter = 1.69;                     // bord exterieur du cadre de fenetre (repere)
 let tickets = [], focused = null, hovered = null, dragging = false, lastDrag = null;
 let heroActive = false, detailOpen = false, shake = 0;
@@ -788,7 +791,25 @@ let openPanel = null;                        // panneau plein ecran ouvert (ou n
 /* v7 - guichet " billet en main " : un seul billet vintage en scene, les autres rejoignent le rang quand on les tamponne */
 let heroIdx = -1, stampedOrder = [], stampingLock = false;   // heroIdx = -1 -> aucun billet en main (pile au repos)
 let pileHover = null, pileGlow = null;
-const PILE_X = -1.02, PILE_Z = 1.46, PILE_Y = .014;          // emplacement fixe de la pile (sur le comptoir)
+const PILE_X = 0, PILE_Z = 1.46, PILE_Y = .014;             // pile de billets : centree sur le comptoir
+const CESAR_X0 = 1.85, CESAR_HALF_W = .16, AWARD_GAP = .24;   // statuettes (trophees) posees sur le comptoir ; x affine par placeCesar()
+/* Cloche / rideaux : la cloche posee sur le comptoir OUVRE ou FERME les rideaux. Guichet ferme
+   = plus aucune lumiere sauf sur la cloche, et les billets ne sont plus selectionnables. */
+let boothsClosed = true, curtainT = 1;                        // le site DEMARRE rideau ferme (curtainT : 0 = ouvert, 1 = ferme) ; un clic sur la cloche ouvre le guichet
+let curtainMatRef = null;                                     // materiau des rideaux (assombri a la fermeture)
+let boothBell = null, bellHit = null, bellMatRef = null, bellLight = null, bellGlow = null;
+let sceneAmbient = null, sceneDir = null, sceneRim = null, projBeam = null;
+let boothLamp = null, boothWarm = null, boothLampLight = null;
+const BELL_NDC = -.58;                                        // position ecran de la cloche (world x calcule par placeBell)
+const bellNdc = new THREE.Vector3();                          // scratch : position ecran de la cloche (invite " sonnez " )
+/* projecteur du curseur : un faisceau doux + une tache de lumiere qui eclairent, en
+   direct, l'endroit vise par le pointeur (billet compris). Eteint quand le guichet est ferme. */
+const cursorNdc = { x:0, y:0 };                               // position du pointeur en NDC
+let cursorOn = false, cursorFade = 0;                         // pointeur vu ? / fondu courant
+let cursorSpot = null, cursorBeam = null, cursorGlow = null;  // spot, faisceau visible, tache posee
+let cursorBeamMat = null, cursorGlowMat = null;
+const cursorHit = new THREE.Vector3();                        // point eclaire (recalcule chaque frame)
+const awardEnvMats = [];                                      // materiaux des trophees (reflets adoucis quand ferme)
 let swipeX = 0, swipeY = 0, swipeT = 0;
 const pointerNdc = { x:0, y:0 };
 const raycaster = new THREE.Raycaster();
@@ -1176,19 +1197,170 @@ function makeBoothInterior(){
   boothClockHands = clockHands;
   updateClock();
 
-  // --- l'ancienne silhouette du caissier a ete retiree : elle est remplacee par une
-  //     statuette facon Cesar posee sur le comptoir, a DROITE de l'affiche rouge
-  //     (construite dans makeVintageBooth, position ajustee par placeCesar()) ---
+  // --- l'ancienne silhouette du caissier a ete retiree : elle est remplacee par deux
+  //     statuettes de recompense posees sur le comptoir, a DROITE de l'affiche rouge -
+  //     le CESAR et l'OSCAR (construites par makeCesarStatue / makeOscarStatue,
+  //     positions ajustees par placeCesar()) ---
 
   // --- lumiere chaude de la cabine ---
   const warm = new THREE.PointLight(0xffc07a, 1.2, 11, 2);
   warm.position.set(0, 2.35, -4.0); g.add(warm);
   const lampLight = new THREE.PointLight(0xffd9a0, .8, 5, 2);
   lampLight.position.set(2.05, 1.55, -3.6); g.add(lampLight);
+  boothWarm = warm; boothLampLight = lampLight;        // references : eteintes quand les rideaux sont fermes
 
   // --- la cabine remonte juste derriere la fenetre, a hauteur de comptoir ---
   g.position.set(0, -.95, 3.0);
 
+  return g;
+}
+/* Environnement local (PMREM) reserve AUX deux trophees : sans carte d'environnement,
+   un metal tres reflechissant (or, bronze poli) parait plat/mat. On fabrique une petite
+   equirectangulaire chaude (ciel clair en haut, sol sombre en bas) -> reflets credibles.
+   Repli silencieux si le PMREM echoue : on garde alors l'emisssif de secours. */
+let awardEnv = null, awardEnvTried = false;
+function getAwardEnv(){
+  if(awardEnvTried) return awardEnv;
+  awardEnvTried = true;
+  try{
+    if(!renderer) return null;
+    const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+    const g = c.getContext("2d");
+    const grd = g.createLinearGradient(0,0,0,128);
+    grd.addColorStop(0,"#fff4dd"); grd.addColorStop(.45,"#cdab78");
+    grd.addColorStop(.62,"#6d5436"); grd.addColorStop(1,"#241a12");
+    g.fillStyle = grd; g.fillRect(0,0,256,128);
+    const rg = g.createRadialGradient(72,32,2,72,32,48);   // petite source chaude (reflet vif)
+    rg.addColorStop(0,"rgba(255,246,228,.95)"); rg.addColorStop(1,"rgba(255,246,228,0)");
+    g.fillStyle = rg; g.fillRect(0,0,256,128);
+    const tex = new THREE.CanvasTexture(c);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    const pm = new THREE.PMREMGenerator(renderer);
+    awardEnv = pm.fromEquirectangular(tex).texture;
+    pm.dispose(); tex.dispose();
+  }catch(e){ awardEnv = null; }
+  return awardEnv;
+}
+/* ============ Statuettes de recompense (posees sur le comptoir) ============
+   CESAR : le trophee de l'Academie des Cesar, imagine par le sculpteur Cesar
+   Baldaccini (depuis 1976) - une " COMPRESSION " de bronze naturel poli :
+   un bloc massif aux aretes vives, froisse de plis irreguliers et coiffe d'un
+   sommet ecrase, dresse sur un socle de marbre noir a bague + plaque dorees.
+   OSCAR : le chevalier Art Deco de l'Academy (dessine par Cedric Gibbons,
+   sculpte par George Stanley) - une silhouette stylisee, lisse et sans visage,
+   serrant une epee pointe en BAS, debout sur une BOBINE DE FILM a CINQ RAYONS
+   (les cinq branches de l'Academie), le tout en or poli. */
+function makeCesarStatue(){
+  const g = new THREE.Group();
+  const bronze = new THREE.MeshStandardMaterial({color:0xa87b3c, roughness:.30, metalness:.95, flatShading:true, emissive:0x140d04, emissiveIntensity:.35});
+  const marble = new THREE.MeshStandardMaterial({color:0x0d0b08, roughness:.30, metalness:.30});
+  const plate  = new THREE.MeshStandardMaterial({color:0xcfa757, roughness:.28, metalness:.80, flatShading:true, emissive:0x1e1405, emissiveIntensity:.35});
+
+  // socle de marbre noir : dalle + petit chanfrein, bague doree et plaque gravee
+  const base = new THREE.Mesh(new THREE.BoxGeometry(.235,.052,.205), marble);
+  base.position.y = .026; g.add(base);
+  const bev = new THREE.Mesh(new THREE.BoxGeometry(.213,.010,.183), marble);
+  bev.position.y = .056; g.add(bev);
+  const ring = new THREE.Mesh(new THREE.BoxGeometry(.243,.007,.213), plate);
+  ring.position.y = .0045; g.add(ring);
+  const pla = new THREE.Mesh(new THREE.BoxGeometry(.155,.032,.004), plate);
+  pla.position.set(0,.030,.104); g.add(pla);
+
+  // Cesar : bloc rectangulaire compressé, très anguleux
+  const W = .205, H = .335, D = .175;
+  const geo = new THREE.BoxGeometry(W, H, D, 6, 22, 5);
+  const p = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.set(p.getX(i), p.getY(i), p.getZ(i));
+    const y = v.y, t = y/H + .5;
+    let nx = v.x/(W/2), nz = v.z/(D/2);
+    const l = Math.hypot(nx,nz) || 1e-6; nx/=l; nz/=l;
+    const a = Math.atan2(v.z, v.x);
+    const crease = .65*Math.sin(y*28 + a*2.5) + .35*Math.sin(y*52 + a*5.4 + 1.7)
+                 + .22*Math.sin(a*7.8 + y*13)  + .14*Math.sin(a*16 - y*38);
+    const disp  = .016*crease;
+    const taper = 1 - .08*t;
+    p.setX(i, v.x*taper + nx*disp);
+    p.setZ(i, v.z*taper + nz*disp);
+    // sommet très écrasé
+    if(t > .98) p.setY(i, y - .016 - .032*Math.abs(Math.sin(a*2.8)) - .018*Math.abs(Math.sin(a*6.2 + .9)));
+  }
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, bronze);
+  body.position.y = .062 + H/2;
+  body.rotation.y = .34; body.rotation.z = .015;
+  g.add(body);
+  return g;
+}
+function makeOscarStatue(){
+  const g = new THREE.Group();
+  const gold   = new THREE.MeshStandardMaterial({color:0xe3b04a, roughness:.24, metalness:1.0, emissive:0x2a1e06, emissiveIntensity:.35});
+  const goldD  = new THREE.MeshStandardMaterial({color:0xd3a13f, roughness:.32, metalness:.95, emissive:0x241804, emissiveIntensity:.35});
+  const goldF  = new THREE.MeshStandardMaterial({color:0xd3a13f, roughness:.30, metalness:.95, side:THREE.DoubleSide, emissive:0x241804, emissiveIntensity:.35});
+  const V = (x,y,z) => new THREE.Vector3(x,y,z);
+  // petit membre : cylindre tendu entre deux points (a -> b), rayons r0 puis r1
+  const limb = (a,b,r0,r1,mat,seg=12) => {
+    const dir = new THREE.Vector3().subVectors(b,a), len = dir.length() || 1e-6;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,len,seg), mat);
+    m.position.copy(a).addScaledVector(dir,.5);
+    m.quaternion.setFromUnitVectors(V(0,1,0), dir.clone().normalize());
+    return m;
+  };
+
+  // ---- bobine de film a cinq rayons (les cinq branches de l'Academie) ----
+  const R = .072;                                      // rayon de la bobine
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(R,R,.048,40,1,true), goldF);
+  rim.position.y = .024; g.add(rim);                   // bande exterieure (creuse)
+  const botF = new THREE.Mesh(new THREE.RingGeometry(.020,R,40), goldF);
+  botF.rotation.x = -Math.PI/2; botF.position.y = .0015; g.add(botF);
+  const topF = new THREE.Mesh(new THREE.RingGeometry(.020,R,40), goldF);
+  topF.rotation.x = -Math.PI/2; topF.position.y = .0465; g.add(topF);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(.019,.019,.048,16), goldD);
+  hub.position.y = .024; g.add(hub);
+  for(let i=0;i<5;i++){
+    const h = new THREE.Group(); h.rotation.y = i*Math.PI*2/5;
+    const sp = new THREE.Mesh(new THREE.BoxGeometry(R-.019,.013,.014), goldD);
+    sp.position.set((R+.019)/2, .024, 0); h.add(sp);
+    g.add(h);
+  }
+
+  // ---- chevalier Art Deco : debout, pieds joints sur la bobine ----
+  const y0 = .048;                                     // dessus de la bobine (les pieds y reposent)
+  const footL = V(-.015, y0+.004, .004), hipL = V(-.014, y0+.096, 0);
+  g.add(limb(footL, hipL, .0135, .025, gold));         // jambe gauche (cuisse epaisse en haut)
+  const legR = limb(footL.clone().setX(.015), hipL.clone().setX(.014), .0135, .025, gold);
+  g.add(legR);
+  const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(.030,.026,.028,16), gold);
+  pelvis.position.y = y0+.106; pelvis.scale.z = .80; g.add(pelvis);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(.031,.021,.070,16), gold);
+  torso.position.y = y0+.155; torso.scale.set(1.08,1,.78); g.add(torso);     // buste plus sculpté (Art Deco)
+  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(.086,.024,.030), gold);
+  shoulder.position.y = y0+.196; shoulder.scale.z = .85; g.add(shoulder);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.011,.012,.020,12), gold);
+  neck.position.y = y0+.212; g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.022,18,14), gold);
+  head.position.y = y0+.236; head.scale.set(1,1.16,1.04); head.rotation.x = -.14; g.add(head);   // tete lisse, legerement inclinee
+
+  // ---- bras replies vers l'avant, mains jointes sur la garde ----
+  [-1,1].forEach(s => {
+    const sh = V(s*.042, y0+.192, .002), el = V(s*.050, y0+.162, .012), hd = V(s*.013, y0+.155, .024);
+    g.add(limb(sh, el, .0135, .0115, gold));           // bras
+    g.add(limb(el, hd, .0115, .0095, gold));           // avant-bras
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(.0105,12,10), gold);
+    hand.position.copy(hd); hand.scale.z = .8; g.add(hand);
+  });
+
+  // ---- l'epee, tenue verticalement, POINTE EN BAS ----
+  const SZ = .030;                                     // plan de l'epee (devant le corps)
+  const blade = limb(V(0, y0+.038, SZ), V(0, y0+.118, SZ), .0028, .0072, gold, 10);
+  blade.scale.set(1.25,1,.38); g.add(blade);                   // lame plus fine et verticale, pointe bien en bas
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(.052,.008,.010), gold);
+  guard.position.set(0, y0+.129, SZ); g.add(guard);
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(.0075,.0075,.028,12), gold);
+  grip.position.set(0, y0+.147, SZ); g.add(grip);
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(.010,12,10), gold);
+  pommel.position.set(0, y0+.163, SZ); g.add(pommel);
   return g;
 }
 function makeVintageBooth(){
@@ -1264,6 +1436,7 @@ function makeVintageBooth(){
   const glowM = new THREE.MeshBasicMaterial({map:canvasTex(glowT), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending});
   const lamp = new THREE.PointLight(0xffc07a, 1.05, 9, 2);
   lamp.position.set(0, 1.9, -1.4); g.add(lamp);
+  boothLamp = lamp;                                   // reference : intensite pilote par les rideaux
 
   // --- guirlande d'ampoules facon marquee, au bord bas de l'auvent (pleine largeur) ---
   const bulbMat = new THREE.MeshBasicMaterial({color:0xffe3ac});
@@ -1278,6 +1451,7 @@ function makeVintageBooth(){
   // --- rideaux de velours rouge : SEULS elements laisses SUR LES COTES,
   //     plaques contre les bords de l'ecran (repositionnes dans placeFacade) ---
   const curtainMat = new THREE.MeshBasicMaterial({map:canvasTex(texCurtain()), side:THREE.DoubleSide});
+  curtainMatRef = curtainMat;
   boothCurtains = [];
   [-1,1].forEach(sgn => {
     const c = new THREE.Mesh(new THREE.PlaneGeometry(.7, 3.6), curtainMat);
@@ -1296,44 +1470,50 @@ function makeVintageBooth(){
   tbFace.position.z = .015; tb.add(tbFace);
   tb.position.set(1.00, .14, .90); tb.rotation.x = -.20; g.add(tb);   // posee sur le comptoir (surface y = 0)
 
-  // --- statuette facon CESAR (bronze compresse) posee SUR le comptoir, a DROITE de l'affiche rouge ---
-  const bronzeM = new THREE.MeshStandardMaterial({color:0xbb9457, roughness:.44, metalness:.55, emissive:0x2a1c06, emissiveIntensity:.6, flatShading:true});
-  const stoneM  = new THREE.MeshStandardMaterial({color:0x14110c, roughness:.42, metalness:.2});
-  const cesar = new THREE.Group();
-  // socle carre en marbre noir + petite plaque gravee
-  const cBase = new THREE.Mesh(new THREE.BoxGeometry(.26,.055,.20), stoneM);
-  cBase.position.y = .0275; cesar.add(cBase);
-  const cPlate = new THREE.Mesh(new THREE.BoxGeometry(.16,.012,.003), new THREE.MeshStandardMaterial({color:0xd8b25a, roughness:.35, metalness:.6, emissive:0x2a1c06, emissiveIntensity:.6}));
-  cPlate.position.set(0,.028,.101); cesar.add(cPlate);
-  // bronze compresse : cylindre 8 pans dont on deplace les sommets (facettes irregulieres) + vrillage
-  const cGeo = new THREE.CylinderGeometry(.060,.094,.43,8,16);
-  const cp = cGeo.attributes.position;
-  for(let i=0;i<cp.count;i++){
-    const px = cp.getX(i), py = cp.getY(i), pz = cp.getZ(i);
-    const r = Math.hypot(px,pz);
-    if(r > 1e-4){
-      const a = Math.atan2(pz,px);
-      const k = 1 + .17*Math.sin(a*3 + py*11) + .09*Math.sin(py*27 + a*1.7);
-      cp.setX(i, Math.cos(a)*r*k);
-      cp.setZ(i, Math.sin(a)*r*k);
-    }
-  }
-  cGeo.computeVertexNormals();
-  const cBody = new THREE.Mesh(cGeo, bronzeM);
-  cBody.scale.set(1.34, 1, .70);            // silhouette "ecrasee" (plus large que profonde)
-  cBody.rotation.y = .45; cBody.rotation.z = .035;
-  cBody.position.y = .055 + .215;           // pose sur le socle
-  cesar.add(cBody);
-  cesar.scale.setScalar(.88);
-  cesar.position.set(1.85, 0, .45); g.add(cesar);   // x affine par placeCesar() selon la largeur d'ecran
-  boothCesar = cesar;
+  // --- statuettes de recompense posees SUR le comptoir, a DROITE de l'affiche rouge :
+  //     le CESAR (bronze comprime) et, juste a cote, l'OSCAR (chevalier dore) ---
+  boothCesar = makeCesarStatue();
+  boothCesar.scale.setScalar(.94);                    // ~ 30 cm
+  boothCesar.position.set(CESAR_X0, 0, .45);          // x affine par placeCesar() selon la largeur d'ecran
+  g.add(boothCesar);
+  boothOscar = makeOscarStatue();
+  boothOscar.scale.setScalar(1.45);                   // ~ 34 cm (real Oscar)
+  boothOscar.position.set(CESAR_X0 - AWARD_GAP, 0, .45);
+  g.add(boothOscar);
+  // reflets reels sur l'or et le bronze des deux trophees (repli : emissif de secours)
+  const awardRefl = getAwardEnv();
+  if(awardRefl) [boothCesar, boothOscar].forEach(o => o.traverse(n => {
+    if(n.isMesh){ n.material.envMap = awardRefl; n.material.envMapIntensity = .95; n.material.needsUpdate = true; awardEnvMats.push(n.material); }
+  }));
 
   // (les affiches anglaises ont rejoint le MUR DU FOND, sur le meme plan que le panneau
   //  des billets tamponnes -> voir makeBoothInterior : plus de cadre en bois, rien ne bouge)
 
-  // --- cloche de comptoir en laiton ---
-  mk(new THREE.SphereGeometry(.10,16,12,0,Math.PI*2,0,Math.PI/2), brass, -1.5, 0, 1.45);
-  mk(new THREE.SphereGeometry(.03,10,8), brass, -1.5, .075, 1.45);
+  // --- cloche de comptoir en laiton : CLIC = ouvrir / fermer les rideaux ---
+  bellMatRef = new THREE.MeshStandardMaterial({map:canvasTex(texBrass()), roughness:.30, metalness:.92});
+  boothBell = new THREE.Group();
+  const bellDome = new THREE.Mesh(new THREE.SphereGeometry(.10,18,14,0,Math.PI*2,0,Math.PI/2), bellMatRef);
+  const bellKnob = new THREE.Mesh(new THREE.SphereGeometry(.028,12,10), bellMatRef);
+  bellKnob.position.y = .082; boothBell.add(bellDome, bellKnob);
+  // cible de clic large et invisible : la cloche reste facile a toucher (surtout sur mobile)
+  bellHit = new THREE.Mesh(new THREE.SphereGeometry(.28,12,10),
+    new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false}));
+  bellHit.position.y = .06; boothBell.add(bellHit);
+  // halo chaud pose sur le comptoir : seule " lumiere " visible une fois le guichet ferme
+  const bellGlowTex = texCanvas(128,128,(c)=>{
+    const gg = c.createRadialGradient(64,64,3,64,64,62);
+    gg.addColorStop(0,"rgba(255,228,175,1)");
+    gg.addColorStop(.35,"rgba(255,196,110,.5)");
+    gg.addColorStop(1,"rgba(255,190,110,0)");
+    c.fillStyle = gg; c.fillRect(0,0,128,128);
+  });
+  bellGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.0,1.0),
+    new THREE.MeshBasicMaterial({map:canvasTex(bellGlowTex), transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending}));
+  bellGlow.rotation.x = -Math.PI/2; bellGlow.position.y = .006; boothBell.add(bellGlow);
+  bellLight = new THREE.PointLight(0xffcf94, 0, 4.5, 2);
+  bellLight.position.set(0, .36, .16); boothBell.add(bellLight);
+  boothBell.position.set(-1.5, 0, 1.45);              // x affine par placeBell() selon la largeur d'ecran
+  g.add(boothBell);
 
   // --- comptoir en bois peu profond (on est penche dessus) ---
   mk(new THREE.BoxGeometry(30,.36,1.76), woodD, 0,-2.72,1.10);        // pietement
@@ -1382,9 +1562,9 @@ function buildScene(){
   camera.position.set(0,.72,3.6);
   camera.lookAt(0,camLookY,0);
 
-  scene.add(new THREE.AmbientLight(0xfff3e2, .88));
-  const dir = new THREE.DirectionalLight(0xffe8d0, .9); dir.position.set(-4,6,5); scene.add(dir);
-  const rim = new THREE.DirectionalLight(0x7799ff, .3); rim.position.set(4,2,-6); scene.add(rim);
+  sceneAmbient = new THREE.AmbientLight(0xfff3e2, .88); scene.add(sceneAmbient);
+  sceneDir = new THREE.DirectionalLight(0xffe8d0, .9); sceneDir.position.set(-4,6,5); scene.add(sceneDir);
+  sceneRim = new THREE.DirectionalLight(0x7799ff, .3); sceneRim.position.set(4,2,-6); scene.add(sceneRim);
 
   // guichet vintage (fenetre de caisse, auvent, lambris, comptoir)
   scene.add(makeVintageBooth());
@@ -1396,6 +1576,42 @@ function buildScene(){
   const beam = new THREE.Mesh(new THREE.ConeGeometry(5.2,10,48,1,true),
     new THREE.MeshBasicMaterial({color:0xffe6bd, transparent:true, opacity:.05, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
   beam.position.set(0,4.8,1); beam.rotation.x = .03; scene.add(beam);
+  projBeam = beam;                                     // reference : faisceau eteint quand le guichet est ferme
+
+  // --- projecteur du curseur : un faisceau doux qui suit le pointeur, un vrai SpotLight
+  //     qui eclaire la ou on vise, et une tache de lumiere posee SUR la surface (comptoir,
+  //     mur... ou le billet sous le curseur). ---
+  cursorSpot = new THREE.SpotLight(0xffe4bc, 0, 0, .19, .9, 2);
+  scene.add(cursorSpot); scene.add(cursorSpot.target);
+  // faisceau : UNE seule face douce, tournee vers la camera (aucune arete dure).
+  // La texture dessine le cone : etroit en haut (la source), large et estompe en bas.
+  const shaftTex = texCanvas(256,256,(c,w,h)=>{
+    for(let y=0;y<h;y++){
+      const k = y/(h-1);                                   // 0 = source, 1 = point vise
+      const half = (w*.5) * (.05 + .95*Math.pow(k,.9));    // le faisceau s'ouvre vers le bas
+      const a = .52 - .32*Math.pow(k,1.1);                 // dense a la source, plus doux au sol
+      const lg = c.createLinearGradient(w/2-half, 0, w/2+half, 0);
+      lg.addColorStop(0,  "rgba(255,236,198,0)");
+      lg.addColorStop(.5, "rgba(255,240,208,"+a.toFixed(3)+")");
+      lg.addColorStop(1,  "rgba(255,236,198,0)");
+      c.fillStyle = lg; c.fillRect(w/2-half, y, half*2, 1.6);
+    }
+  });
+  cursorBeamMat = new THREE.MeshBasicMaterial({map:canvasTex(shaftTex), color:0xffe6bd, transparent:true,
+    opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide, fog:false});
+  cursorBeam = new THREE.Mesh(new THREE.PlaneGeometry(1,1), cursorBeamMat);
+  cursorBeam.visible = false; scene.add(cursorBeam);
+  const curGlowTex = texCanvas(128,128,(c)=>{
+    const cg = c.createRadialGradient(64,64,2,64,64,62);
+    cg.addColorStop(0,  "rgba(255,244,214,.95)");
+    cg.addColorStop(.34,"rgba(255,214,150,.45)");
+    cg.addColorStop(1,  "rgba(255,196,124,0)");
+    c.fillStyle = cg; c.fillRect(0,0,128,128);
+  });
+  cursorGlowMat = new THREE.MeshBasicMaterial({map:canvasTex(curGlowTex), transparent:true, opacity:0,
+    depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false});
+  cursorGlow = new THREE.Mesh(new THREE.PlaneGeometry(1,1), cursorGlowMat);
+  cursorGlow.visible = false; scene.add(cursorGlow);
 
   // poussieres
   const dustN = innerWidth < 700 ? 140 : 340;
@@ -1459,6 +1675,7 @@ function buildScene(){
       dragY:0,dragX:0, dragYc:0,dragXc:0,
       activPrev:false, stampAnim:0, stampDone:false, stamping:false,
       hasVideo: isVideo(p.front.src) || isVideo(p.back.src),
+      litMats:[frontMat, backMat, edgeMat], lit:0,     // allumage par le projecteur du curseur
     };
     mesh.userData.i = i;
     tickets.push(t); byId[p.id] = t;
@@ -1481,7 +1698,14 @@ function buildScene(){
     t.frontMat.opacity = t.backMat.opacity = t.edgeMat.opacity = 0;
   });
   toPile(true);                                 // au depart : pas de billet en main, la pile au comptoir
-  ticketBar.classList.add("show"); ticketBar.setAttribute("aria-hidden","false");
+  if(boothsClosed){                             // rideau ferme au demarrage : la barre d'invitation reste cachee,
+    ticketBar.classList.remove("show");         // c'est la cloche (seul point eclaire) qui ouvre le guichet
+    ticketBar.setAttribute("aria-hidden","true");
+    document.body.classList.remove("hand");
+    if(hint) hint.classList.add("hide");
+  } else {
+    ticketBar.classList.add("show"); ticketBar.setAttribute("aria-hidden","false");
+  }
   bindWorld();
   startLoop();
 }
@@ -1580,14 +1804,18 @@ function stackLayout(){
   // feuillette les billets ou qu'on en tamponne un.
   const BX = PILE_X, BZ = PILE_Z, BY = PILE_Y;
   const mid = (tickets.length - 1)/2;
+  // La pile grossit en portrait : a la meme taille qu'en desktop, elle ne fait
+  // que quelques dizaines de pixels de large sur un ecran etroit.
+  const pileScale = (innerWidth/innerHeight) < .85 ? .52 : (innerWidth/innerHeight) < 1.3 ? .42 : .33;
+  const k = pileScale/.33;                       // homothetie de la pile (positions + tailles)
   tickets.forEach(t => {
     if(t.stamped || t.i === heroIdx) return;      // en main (hero) ou deja punaise : hors de la pile
     const off = t.i - mid;                        // decalage stable, centre sur BX / BZ
     t.home = {
-      x: BX + off*.006,
-      y: BY + t.i*.0045,                          // epaisseur de la pile (index stable)
-      z: BZ + off*.006,
-      rx: -Math.PI/2, ry: 0, scale: .33,          // bien a plat, sans oscillation
+      x: BX + off*.006*k,
+      y: BY + t.i*.0045*k,                        // epaisseur de la pile (index stable)
+      z: BZ + off*.006*k,
+      rx: -Math.PI/2, ry: 0, scale: pileScale,    // bien a plat, sans oscillation
     };
   });
 }
@@ -1598,11 +1826,191 @@ function stackLayout(){
    la largeur. */
 function placeFacade(){
   if(!camera) return;
+  layoutCurtains();
+}
+/* Rideaux : ouverts, ils cadrent les bords de l'ecran ; fermes, ils tirent vers le centre et
+   s'elargissent pour boucher toute la fenetre de caisse (curtainT : 0 = ouvert, 1 = ferme). */
+function layoutCurtains(){
+  if(!camera || !boothCurtains.length) return;
   const aspect = innerWidth/innerHeight;
   const tanF = Math.tan(camera.fov*Math.PI/360);
   const dC = Math.max(1, camera.position.z - .16);        // plan des rideaux (z monde ~ .16)
-  const cx = clamp(tanF*dC*aspect*1.02, 2.2, 5.0);        // centre du rideau ~ bord de l'ecran
-  boothCurtains.forEach(c => { c.position.x = (c.userData.sgn || 1) * cx; });
+  const cx = clamp(tanF*dC*aspect*1.02, 2.2, 5.0);        // centre du rideau ouvert ~ bord de l'ecran
+  const halfW = tanF*dC*aspect*1.06;                      // demi-largeur REELLEMENT visible (+ marge) au plan des rideaux
+  const halfH = tanF*dC*1.06;                             // demi-hauteur visible (+ marge)
+  const t = curtainT;
+  const openY = .55, closeY = camLookY;
+  const scaleX = lerp(1, Math.max(.7, halfW)/.7, t);      // elargit pour couvrir la moitie de l'ecran
+  const scaleY = lerp(1, Math.max(1, (halfH*2)/3.6), t);  // etire pour couvrir toute la hauteur
+  boothCurtains.forEach(c => {
+    const sgn = c.userData.sgn || 1;
+    c.position.x = sgn * lerp(cx, halfW/2, t);
+    c.position.y = lerp(openY, closeY, t);
+    c.scale.x = scaleX; c.scale.y = scaleY;
+  });
+}
+/* Cloche : posee sur le comptoir, maintenue visible sur TOUS les ecrans (position NDC fixe,
+   legerement a gauche de la pile desormais centree). */
+function placeBell(){
+  if(!boothBell || !camera) return;
+  const tanX = Math.tan(camera.fov*Math.PI/360)*(innerWidth/innerHeight);
+  const camZ = Math.max(1, camera.position.z);
+  const depth = Math.max(.5, camZ - boothBell.position.z);
+  boothBell.position.x = BELL_NDC * depth * tanX;
+  if(bellHint){                       // l'invite " sonnez la cloche " se cale SOUS la cloche, a l'ecran
+    camera.updateMatrixWorld();        // la scene n'est pas encore rendue ici : la matrice inverse peut etre perimee
+    bellNdc.set(boothBell.position.x, boothBell.position.y, boothBell.position.z).project(camera);
+    const L = Math.min(94, Math.max(6, (bellNdc.x + 1) * 50));
+    let topPct = Math.min(84, Math.max(12, (1 - bellNdc.y) * 50 + 12));
+    // l'invite ne doit jamais passer SOUS la barre de caisse du bas
+    const barPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar")) || 56;
+    const maxTop = innerHeight - barPx - (bellHint.offsetHeight || 22) - 10;
+    if(maxTop > 0) topPct = Math.min(topPct, maxTop / innerHeight * 100);
+    bellHint.style.left = L + "%";
+    bellHint.style.top  = topPct + "%";
+  }
+}
+function pickBell(px,py){
+  if(!bellHit || !camera) return false;
+  pointerNdc.x = px; pointerNdc.y = py;
+  raycaster.setFromCamera(pointerNdc, camera);
+  return raycaster.intersectObject(bellHit, false).length > 0;
+}
+/* La cloche bascule le guichet : rideaux ouverts <-> fermes. */
+function toggleCurtains(){
+  boothsClosed = !boothsClosed;
+  if(boothsClosed){
+    if(detailOpen) closeDetail();
+    if(focused) unfocusTicket();
+    if(heroIdx >= 0) toPile(false);
+    document.body.classList.remove("ticket-open");
+    if(ticketBar){ ticketBar.classList.remove("show"); ticketBar.setAttribute("aria-hidden","true"); }
+    if(hint) hint.classList.add("hide");
+  } else {
+    if(hint) hint.classList.remove("hide");
+    syncHandUI();
+  }
+  snd.bell();
+}
+/* Eclairage : guichet ferme -> tout s'eteint SAUF la cloche ; la pile n'est plus mise en avant. */
+function applyCurtainLighting(){
+  const t = curtainT;
+  if(sceneAmbient)    sceneAmbient.intensity    = lerp(.88, .055, t);
+  if(sceneDir)        sceneDir.intensity        = lerp(.90, .06,  t);
+  if(sceneRim)        sceneRim.intensity        = lerp(.30, .04,  t);
+  if(boothLamp)       boothLamp.intensity       = lerp(1.05, .05, t);
+  if(boothWarm)       boothWarm.intensity       = lerp(1.20, .05, t);
+  if(boothLampLight)  boothLampLight.intensity  = lerp(.80, .04, t);
+  if(projBeam)        projBeam.material.opacity = lerp(.05, 0, t);
+  if(curtainMatRef){                                  // " plus d'eclairage sur les rideaux "
+    const k = lerp(1, .24, t);
+    curtainMatRef.color.setRGB(k*.95, k*.78, k*.78);
+  }
+  if(bellMatRef)      bellMatRef.emissive.setRGB(.62*t, .40*t, .15*t);
+  if(bellLight)       bellLight.intensity       = lerp(0, 2.6, t);
+  if(bellGlow)        bellGlow.material.opacity = lerp(0, .7, t);
+  for(const m of awardEnvMats) if(m && m.envMapIntensity !== undefined) m.envMapIntensity = lerp(.95, .06, t);
+}
+/* ======== Projecteur du curseur : un faisceau doux descend vers le point vise, un vrai
+   SpotLight eclaire la surface, et une tache de lumiere se pose SUR cette surface.
+   Si le curseur est sur un billet, c'est LE BILLET qui est vise : la tache se pose sur
+   son papier et le billet s'allume (ses materiaux sont " non eclaires ", on monte donc
+   leur couleur). Tout s'eteint quand le guichet est ferme (curtainT -> 1) ainsi que hors
+   de la scene 3D (panneau ouvert, fiche film, scroll). */
+const CURSOR_ANG = .19, CURSOR_Z = new THREE.Vector3(0,0,1);      // axe local du plan de la tache
+const cursorSrc = new THREE.Vector3(), cursorDir = new THREE.Vector3();
+const cursorMid = new THREE.Vector3(), cursorNrm = new THREE.Vector3();
+const curV1 = new THREE.Vector3(), curV2 = new THREE.Vector3(), curV3 = new THREE.Vector3();
+const curBasis = new THREE.Matrix4(), curNmat = new THREE.Matrix3();
+let litTicket = null;                                             // billet sous le curseur
+const ticketMeshes = [];                                          // (rempli une fois la scene batie)
+
+function placeCursorBeam(dt){
+  if(!cursorSpot || !camera) return;
+  if(!ticketMeshes.length) for(const t of tickets) if(t.mesh) ticketMeshes.push(t.mesh);
+  const want = (cursorOn && heroActive && !openPanel && !detailOpen && !stampingLock && !document.hidden)
+    ? (1 - curtainT) : 0;
+  cursorFade += (want - cursorFade) * Math.min(1, (dt || .016) * 6);
+  const f = cursorFade < .012 ? 0 : cursorFade;
+
+  // 0) le curseur est-il pose sur un billet ?
+  raycaster.setFromCamera(cursorNdc, camera);
+  const onTicket = f ? raycaster.intersectObjects(ticketMeshes, false)[0] : null;
+  litTicket = onTicket ? tickets[onTicket.object.userData.i] : null;
+
+  // le billet vise s'allume (et se rallume en douceur) : ses materiaux ne captent pas la lumiere
+  for(const t of tickets){
+    const goal = (t === litTicket) ? f : 0;
+    t.lit += (goal - t.lit) * Math.min(1, (dt || .016) * 9);
+    if(t.lit < .002 && !goal && t.litMats[0].color.r === 1) continue;
+    const v = 1 + .10 * t.lit;
+    for(const m of t.litMats) m.color.setScalar(v);
+  }
+
+  if(!f){
+    cursorSpot.visible = false; cursorBeam.visible = false; cursorGlow.visible = false;
+    cursorSpot.intensity = 0;
+    return;
+  }
+  cursorSpot.visible = true; cursorBeam.visible = true; cursorGlow.visible = true;
+
+  // 1) point vise + normale de la surface (billet, sinon comptoir, sinon mur du fond)
+  let t = 0;
+  if(onTicket){
+    cursorHit.copy(onTicket.point);
+    curNmat.getNormalMatrix(onTicket.object.matrixWorld);
+    cursorNrm.copy(onTicket.face.normal).applyMatrix3(curNmat).normalize();
+  }else{
+    const o = raycaster.ray.origin, d = raycaster.ray.direction;
+    let surf = null;                                     // "floor" = comptoir, "wall" = mur du fond
+    if(d.y < -1e-4){                                     // plan du comptoir (surface y = 0)
+      const tc = -o.y/d.y, zc = o.z + d.z*tc;
+      if(tc > .3 && zc > .15 && zc < 2.05){ t = tc; surf = "floor"; }
+    }
+    if(!t && d.z < -1e-4){                               // sinon : le mur du fond
+      const tw = (-2.19 - o.z)/d.z;
+      if(tw > .3){ t = tw; surf = "wall"; }
+    }
+    if(!t) t = 3.4;                                      // repli : on reste sur le rayon
+    cursorHit.set(o.x + d.x*t, o.y + d.y*t, o.z + d.z*t);
+    cursorNrm.set(0, surf === "floor" ? 1 : 0, surf === "wall" ? 1 : 0);
+  }
+  // la normale regarde toujours vers la camera (tache visible)
+  if(cursorNrm.dot(curV1.copy(camera.position).sub(cursorHit)) < 0) cursorNrm.negate();
+
+  // 2) la source : au-dessus et legerement en avant du point, comme un projecteur
+  cursorSrc.set(cursorHit.x,
+                Math.max(cursorHit.y + 2.2, 2.45),
+                Math.min(cursorHit.z + 1.05, camera.position.z - 1.3));
+  const len = Math.max(.8, cursorSrc.distanceTo(cursorHit));
+  cursorDir.subVectors(cursorHit, cursorSrc).normalize();
+
+  cursorSpot.position.copy(cursorSrc);
+  cursorSpot.target.position.copy(cursorHit);
+  cursorSpot.target.updateMatrixWorld();
+  cursorSpot.intensity = 24 * f;
+
+  // 3) le faisceau : une face douce, posee de la source au point vise, tournee vers la camera
+  cursorMid.copy(cursorSrc).add(cursorHit).multiplyScalar(.5);
+  curV1.copy(cursorDir).negate();                                   // Y local : surface -> source
+  curV2.copy(camera.position).sub(cursorMid).normalize();
+  curV3.copy(curV2).addScaledVector(curV1, -curV2.dot(curV1));      // Z local : vers la camera
+  if(curV3.lengthSq() < 1e-6) curV3.set(0,0,1);
+  curV3.normalize();
+  curV2.crossVectors(curV1, curV3).normalize();                     // X local
+  curBasis.makeBasis(curV2, curV1, curV3);
+  cursorBeam.position.copy(cursorMid);
+  cursorBeam.quaternion.setFromRotationMatrix(curBasis);
+  cursorBeam.scale.set(len * Math.tan(CURSOR_ANG) * 2, len, 1);
+  cursorBeamMat.opacity = .18 * f;
+
+  // 4) la tache de lumiere, posee a plat sur la surface visee (billet compris)
+  const dc = Math.max(.5, camera.position.distanceTo(cursorHit));
+  const gs = Math.min(.9, Math.max(.32, dc * .13)) * (onTicket ? 1.2 : 1);
+  cursorGlow.position.copy(cursorHit).addScaledVector(cursorNrm, .014);
+  cursorGlow.quaternion.setFromUnitVectors(CURSOR_Z, cursorNrm);
+  cursorGlow.scale.set(gs, gs, 1);
+  cursorGlowMat.opacity = (onTicket ? .5 : .42) * f;
 }
 /* ======== Horloge murale : calee a GAUCHE de la plaque BOX OFFICE ========
    La plaque est sur le mur du fond (x = -1.8, z ~ -2.19) ; on place l'horloge dans
@@ -1631,17 +2039,27 @@ function placeClock(){
   boothClock.position.x = clamp(midNdc * dz * tanX, -4.5, -2.1);
   boothClock.scale.setScalar(s);
 }
-/* ======== Statuette facon Cesar : posee sur le comptoir, juste a DROITE de l'affiche rouge ========
-   On cale son centre NDC juste a droite du bord de l'affiche rouge (planche comprise) sans
-   jamais la faire sortir de l'ecran ; elle est au premier plan, donc jamais masquee. */
+/* ======== Statuettes CESAR + OSCAR : posees sur le comptoir, juste a DROITE de l'affiche rouge ========
+   On cale le couple juste a droite du bord de l'affiche rouge (planche comprise) sans jamais
+   le faire sortir de l'ecran ; les deux sont au premier plan, donc jamais masquees.
+   L'Oscar est pose juste a cote du Cesar (meme plan de comptoir, ecart fixe en monde) : les
+   deux restent ainsi toujours adjacents quelle que soit la largeur de l'ecran. */
 function placeCesar(){
   if(!boothCesar || !camera) return;
   const aspect = innerWidth/innerHeight;
   const tanX = Math.tan(camera.fov*Math.PI/360)*aspect;
   const camZ = Math.max(1, camera.position.z);
   const posterRightNdc = 2.06 / Math.max(.25, (camZ - .025) * tanX);   // bord droit de l'affiche rouge
-  const ndc = clamp(Math.max(posterRightNdc + .05, .58), .58, .90);
-  boothCesar.position.x = ndc * Math.max(.5, camZ - boothCesar.position.z) * tanX;
+  const depth = Math.max(.5, camZ - boothCesar.position.z);
+  const halfNdc = CESAR_HALF_W / (depth * tanX);                        // demi-largeur apparente du Cesar
+  // centre du Cesar : a droite de l'affiche, mais l'ensemble reste entierement a l'ecran
+  let ndc = Math.max(posterRightNdc + .05 + halfNdc, .58);
+  ndc = clamp(ndc, .34 + halfNdc, .96 - halfNdc);
+  boothCesar.position.x = ndc * depth * tanX;
+  if(boothOscar){
+    // l'Oscar partage le meme plan : un simple decalage monde le colle au Cesar
+    boothOscar.position.x = boothCesar.position.x - AWARD_GAP;
+  }
 }
 function setStampCounter(){
   if(stampCounter) stampCounter.querySelector("b").textContent = String(stampedOrder.length);
@@ -1653,6 +2071,7 @@ window.__v7 = () => ({
   tickets: tickets.map(t => ({s:!!t.stamped, o:+t.cop.toFixed(2)})),
   lock: stampingLock,
   detail: detailOpen,
+  closed: boothsClosed, curtainT: +curtainT.toFixed(3),
 });
 
 /* ================== Disposition : camera collee au comptoir ================== */
@@ -1671,6 +2090,7 @@ function computeLayout(){
   rowLayout();                        // range les billets deja tamponnes sur le panneau
   stackLayout();                      // pose la pile des billets encore a tamponner sur le comptoir
   placeFacade();                      // recolle rideaux + affiches aux bords de l'ecran
+  placeBell();                        // cale la cloche sur le comptoir, visible quelle que soit la largeur
   placeClock();                       // cale l'horloge a gauche de la plaque BOX OFFICE
   placeCesar();                       // cale la statuette a droite de l'affiche rouge, sur le comptoir
 }
@@ -1734,7 +2154,7 @@ function unfocusTicket(){
   snd.put();
 }
 function doStamp(){
-  if(stampingLock || openPanel || detailOpen || !tickets.length) return;
+  if(stampingLock || openPanel || detailOpen || boothsClosed || !tickets.length) return;
   const t = tickets[heroIdx];
   if(!t || t.stamped) return;
   stampingLock = true;
@@ -1783,7 +2203,14 @@ function onPointerMove(e){
     if(Math.abs(dx) > 1 || Math.abs(dy) > 1) snd.paper();
     return;
   }
-  if(heroIdx < 0){                       // pile au repos : on survole la pile ou les billets tamponnes
+  if(boothsClosed){                       // guichet ferme : seul le survol de la cloche compte
+    stage.style.cursor = pickBell(px,py) ? "pointer" : "";
+    if(hovered){ setActive(hovered, false); hovered = null; }
+    pileHover = null;
+    return;
+  }
+  if(heroIdx < 0){                       // pile au repos : on survole la pile, la cloche ou les billets tamponnes
+    if(pickBell(px,py)){ stage.style.cursor = "pointer"; pileHover = null; hoverTicket(null); return; }
     const pinned = pickTicket(px,py);
     const p = pinned ? null : pickPile(px,py);
     pileHover = p;
@@ -1798,16 +2225,23 @@ function onPointerMove(e){
     return;
   }
   const pinned = pickTicket(px,py);      // billets deja tamponnes affiches sur le guichet
-  stage.style.cursor = pinned ? "pointer" : "";   // cliquable -> revoir l'affiche
-  hoverTicket(pinned);
+  if(pinned){ stage.style.cursor = "pointer"; hoverTicket(pinned); return; }
+  if(pickBell(px,py)){ stage.style.cursor = "pointer"; hoverTicket(null); return; }   // cloche sous le curseur
+  stage.style.cursor = "";               // cliquable -> revoir l'affiche
+  hoverTicket(null);
 }
 function onPointerDown(e){
   unlockMedia();
   if(e.button !== 0 && e.pointerType !== "touch") return;
   if(e.target.closest("a,button,input,textarea,select,label,#detail,#mobileMenu,#ticketBar")) return;
   if(openPanel || !heroActive || detailOpen || stampingLock) return;
-  e.preventDefault();
   const px = (e.clientX/innerWidth)*2-1, py = -(e.clientY/innerHeight)*2+1;
+  const onBell = pickBell(px,py);
+  if(boothsClosed){             // guichet ferme : seule la cloche repond (reouvre les rideaux)
+    if(onBell){ e.preventDefault(); toggleCurtains(); }
+    return;
+  }
+  e.preventDefault();
   lastDrag = {x:e.clientX, y:e.clientY};
   swipeX = e.clientX; swipeY = e.clientY; swipeT = performance.now();
   if(stage) stage.style.cursor = "";
@@ -1820,8 +2254,10 @@ function onPointerDown(e){
   if(heroIdx < 0){                 // au repos : clic sur la pile -> on prend la carte du dessus
     const p = pickPile(px,py);
     if(p) showHero(p.i, false);
+    else if(onBell) toggleCurtains();   // ... sinon, la cloche ouvre / ferme les rideaux
   } else {                         // clic a cote du billet en main -> on le repose sur la pile
-    toPile(false);
+    if(onBell) toggleCurtains();        // la cloche reste prioritaire sur " reposer le billet "
+    else toPile(false);
   }
 }
 function onPointerUp(e){
@@ -1830,7 +2266,7 @@ function onPointerUp(e){
   const t = tickets[heroIdx];
   const dx = e.clientX - swipeX, dy = e.clientY - swipeY;
   if(Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)*1.4 && (performance.now()-swipeT) < 450
-      && !detailOpen && !openPanel && !stampingLock){
+      && !detailOpen && !openPanel && !stampingLock && !boothsClosed){
     if(Math.abs(t ? t.dragY : 0) < .35) cycleHero(dx > 0 ? -1 : 1);   // swipe -> billet suivant
   }
 }
@@ -1846,7 +2282,7 @@ function onKeyDown(e){
   if(detailOpen){
     if(e.key === "ArrowRight") stepDetail(1);
     if(e.key === "ArrowLeft") stepDetail(-1);
-  } else if(!openPanel){
+  } else if(!openPanel && !boothsClosed){
     if(e.key === "ArrowRight") cycleHero(1);
     if(e.key === "ArrowLeft") cycleHero(-1);
   }
@@ -1854,6 +2290,7 @@ function onKeyDown(e){
 let wheelAcc = 0, wheelIdle = 0, wheelCool = 0;
 function onWheel(e){
   if(openPanel || detailOpen) return;   // laisse defiler le panneau / la fiche
+  if(boothsClosed) return;              // guichet ferme : la molette ne selectionne plus de billet
   // molette peu sensible : il faut un vrai cran (delta cumule) pour changer de billet
   const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
 
@@ -1890,16 +2327,35 @@ function onScroll(){
 
 function bindWorld(){
   addEventListener("pointermove", onPointerMove, {passive:true});
+  addEventListener("pointermove", trackCursor, {passive:true});   // suit le pointeur pour le projecteur
+  addEventListener("pointerdown", trackCursor, {passive:true});
+  addEventListener("pointerup",   trackCursor, {passive:true});
   addEventListener("pointerdown", onPointerDown);
   addEventListener("pointerup", onPointerUp, {passive:true});
   addEventListener("keydown", onKeyDown);
   addEventListener("wheel", onWheel, {passive:false});
   addEventListener("scroll", onScroll, {passive:true});
   addEventListener("resize", onResize);
+  addEventListener("pointerout", e => { if(!e.relatedTarget) cursorOn = false; }, {passive:true});  // souris sortie de la page
   new IntersectionObserver(es => es.forEach(en => {
     heroActive = en.isIntersecting;
     if(!heroActive && focused) unfocusTicket();
   }), {threshold:.55}).observe($("#hero"));
+}
+/* Pointeur -> NDC (sert au projecteur du curseur). Au doigt : pas de curseur,
+   donc le faisceau ne s'allume que pendant l'appui, puis s'eteint au relachement.
+   Sur tactile, le navigateur peut renvoyer un pointermove " mouse " fantome juste
+   apres le doigt (evenement de compatibilite) : on l'ignore un court instant. */
+let lastTouchAt = -1e9;
+function trackCursor(e){
+  const touch = e.pointerType === "touch";
+  if(touch) lastTouchAt = performance.now();
+  if(e.type === "pointerup"){ if(touch) cursorOn = false; return; }
+  if(touch && !e.buttons){ cursorOn = false; return; }
+  if(!touch && performance.now() - lastTouchAt < 1200){ cursorOn = false; return; }
+  cursorNdc.x = (e.clientX/innerWidth)*2 - 1;
+  cursorNdc.y = -(e.clientY/innerHeight)*2 + 1;
+  cursorOn = true;
 }
 function onResize(){
   if(!renderer || !camera) return;
@@ -1967,8 +2423,20 @@ function startLoop(){
     }
     pos.needsUpdate = true;
 
+    // rideaux : ouverts <-> fermes (bascule par la cloche) + eclairage du guichet
+    const cT = boothsClosed ? 1 : 0;
+    curtainT += (cT - curtainT)*.055;
+    if(Math.abs(curtainT - cT) < .0015) curtainT = cT;
+    if(boothCurtains.length) layoutCurtains();
+    applyCurtainLighting();
+    // rideau ferme : la cloche " respire " (halo pulsant) -> on comprend qu'un clic l'ouvre
+    if(bellGlow && curtainT > .02) bellGlow.material.opacity *= .78 + .22*Math.sin(now*2.6);
+    if(bellHint) bellHint.classList.toggle("show", curtainT > .45);
+    placeCursorBeam(dt);                    // projecteur du curseur : faisceau qui eclaire le point vise
+
     // halo de la pile : tres visible au repos (attire l'oeil), discret lorsqu'un billet est en main
-    const glowTarget = (heroIdx < 0 ? .78 : .14) + (heroIdx < 0 ? Math.sin(now*1.6)*.12 : 0);
+    // (eteint quand les rideaux sont fermes : plus rien n'eclaire la pile)
+    const glowTarget = ((heroIdx < 0 ? .78 : .14) + (heroIdx < 0 ? Math.sin(now*1.6)*.12 : 0)) * (1 - curtainT);
     pileGlow.material.opacity += (glowTarget - pileGlow.material.opacity)*.08;
     pileGlow.scale.setScalar(1 + (heroIdx < 0 ? Math.sin(now*1.6)*.05 + .05 : 0));
 
@@ -2045,6 +2513,8 @@ function openDetail(p){
   detailOpen = true;
   detailSheet.style.setProperty("--accent", p.accent);
   $("#dRoom").textContent = `${ROOMS[p.id]} * SCREENING`;
+  const dIdx = ORDER.indexOf(p.id);
+  if($("#dCount")) $("#dCount").textContent = `${dIdx + 1} / ${ORDER.length}`;
   $("#dKicker").textContent = `${p.seance} - ${p.num} / 006 - ${p.duration}`;
   $("#dTitle").textContent = p.title;
   $("#dDomain").textContent = `${p.domain} - ${p.year}`;
@@ -2090,6 +2560,10 @@ function initPanels(){
   panelEls = new Map();
   $$(".panel").forEach(el => {
     panelEls.set(el.id, el);
+    /* bouton FERMER des panneaux (indispensable au doigt : sur telephone le
+       header z-index 360 est sous le panneau z-index 400, donc rien d'autre
+       n'offre de sortie visible que la touche Echap) */
+    $$("[data-close]", el).forEach(b => b.addEventListener("click", closePanel));
   });
 }
 function openPanelById(id){
@@ -2231,6 +2705,9 @@ function initHud(){
 
   /* fiche film */
   $$("[data-close]", detail).forEach(b => b.addEventListener("click", closeDetail));
+  const dPrevBtn = $("#dPrev"), dNextBtn = $("#dNext");
+  if(dPrevBtn) dPrevBtn.addEventListener("click", () => stepDetail(-1));
+  if(dNextBtn) dNextBtn.addEventListener("click", () => stepDetail(1));
 }
 
 /* ================== Boot ================== */

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
 <!-- bump ?v= whenever styles.css / app.js changes, to force a reload (Chrome cache over file://) -->
-<link rel="stylesheet" href="styles.css?v=55" />
+<link rel="stylesheet" href="styles.css?v=60" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'>G</text></svg>" />
 </head>
 <body data-loading="true">
@@ -83,6 +83,7 @@
   <section id="about" class="about panel">
     <div class="panel-top">
       <span>ROOM 01 * PROJECTION</span>
+      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
       <span class="panel-stamp" aria-hidden="true">CREW</span>
     </div>
     <div class="panel-body">
@@ -101,6 +102,7 @@
         </div>
         <div class="about-links">
           <a class="btn btn--small magnetic" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">* GITHUB.COM/LVDOO</a>
+          <a class="btn btn--small btn--ghost magnetic" href="assets/cv/CV-Ludovic-LI.pdf" target="_blank" rel="noopener" data-hover="CV">* CV - PDF</a>
           <a class="btn btn--small btn--ghost magnetic" href="#contact" data-hover="GO">GET IN TOUCH -></a>
         </div>
       </div>
@@ -127,6 +129,7 @@
   <section id="contact" class="contact panel">
     <div class="panel-top">
       <span>ROOM 02 * TILL</span>
+      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
       <span class="panel-stamp" aria-hidden="true">TILL</span>
     </div>
     <div class="panel-body">
@@ -173,13 +176,22 @@
   <button id="stampBtn" class="btn btn--stamp" data-hover="STAMP">* STAMP</button>
 </div>
 
+<!-- ========== HINT: RING THE BELL (booth closed) ========== -->
+<div id="bellHint" aria-hidden="true">
+  <span class="bh-arrow">&#9660;</span>
+</div>
+
 <!-- ========== FILM CARD (THE FILM) ========== -->
 <div id="detail" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Film card">
   <div class="detail-backdrop" data-close></div>
   <article class="detail-sheet" id="detailSheet">
     <div class="detail-top">
+      <button type="button" class="dnav-btn" id="dPrev" aria-label="Previous ticket">&#9664;</button>
+      <span class="dnav-count" id="dCount"></span>
+      <button type="button" class="dnav-btn" id="dNext" aria-label="Next ticket">&#9654;</button>
       <span id="dRoom">ROOM 01 * SCREENING</span>
       <span class="detail-stamp" aria-hidden="true">ADMITTED</span>
+      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
     </div>
     <div class="detail-scroll" id="detailScroll">
       <header class="detail-poster">
@@ -200,7 +212,7 @@
 
 <!-- Three.js (UMD build: works even on double-click, no server) -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="app.js?v=55"></script>
+<script src="app.js?v=64"></script>
 </body>
 </html>
 

@@ -98,12 +98,12 @@ body:not([data-loading="true"]) #loader{opacity:0;visibility:hidden}
 .btn:hover{background:var(--rouge);border-color:var(--rouge);color:#fff;transform:translateY(-2px)}
 .btn--ghost{background:transparent;color:var(--creme)}
 .btn--small{padding:11px 16px;font-size:12px}
-.btn--stamp{background:var(--rouge);border-color:var(--rouge);color:#fff;border-radius:999px;letter-spacing:.16em}
+.btn--stamp{background:var(--rouge);border-color:var(--rouge);color:#fff;border-radius:999px;letter-spacing:.16em;pointer-events:auto}
 .btn--stamp:hover{background:#fff;border-color:#fff;color:var(--rouge)}
 .link-arrow{font-size:12px;letter-spacing:.15em;font-weight:700;text-decoration:none;border-bottom:1px solid var(--gold);padding-bottom:3px;cursor:pointer;color:var(--gold);background:none;border-top:0;border-left:0;border-right:0}
 
 /* -- hero -- */
-.hero{position:relative;z-index:1;min-height:calc(100svh - var(--bar)*2);display:flex;flex-direction:column;
+.hero{position:relative;z-index:1;min-height:calc(100svh - var(--bar)*2 - var(--sat) - var(--sab));display:flex;flex-direction:column;
   justify-content:space-between;padding:calc(var(--bar) + 34px) clamp(18px,5vw,70px) calc(var(--bar) + 20px);pointer-events:none}
 .hero a,.hero button{pointer-events:auto}
 .hero-top{max-width:620px}
@@ -177,7 +177,7 @@ section{padding:80px clamp(18px,5vw,70px);position:relative}
 /* -- barre ticket actif -- */
 #ticketBar{position:fixed;left:0;right:0;bottom:calc(var(--bar) + 16px);z-index:300;display:flex;align-items:center;justify-content:center;
   gap:14px;flex-wrap:wrap;padding:0 16px;pointer-events:none;opacity:0;transform:translateY(24px);transition:opacity .45s,transform .45s}
-#ticketBar.show{opacity:1;transform:none;pointer-events:auto}
+#ticketBar.show{opacity:1;transform:none}  /* pas de pointer-events : seul le bouton tampon est cliquable */
 .stamp-meta{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-right:20px;min-width:0}
 .stamp-title{font-family:var(--font-display);letter-spacing:.14em;color:var(--creme);font-size:clamp(12px,2.4vw,17px);white-space:nowrap}
 .stamp-count{font-family:var(--font-body);font-size:10.5px;letter-spacing:.24em;color:var(--creme-dim);white-space:nowrap}
@@ -185,6 +185,16 @@ section{padding:80px clamp(18px,5vw,70px);position:relative}
 .btn--stamp:disabled{background:#3a3a3c;border-color:#3a3a3c;color:var(--creme-dim);cursor:default;transform:none}
 body:not(.hand) .btn--stamp{display:none}          /* au repos : on invite a cliquer la pile, pas de tampon */
 body:not(.hand) .stamp-title{color:var(--gold)}
+
+/* -- invite " sonnez la cloche " : guichet ferme, seule la cloche est eclairee.
+   La position (left/top) est calee sur la cloche par placeBell(). -- */
+#bellHint{position:fixed;left:50%;top:70%;z-index:300;max-width:calc(100vw - 32px);
+  display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;
+  opacity:0;transform:translate(-50%,14px);transition:opacity .5s,transform .5s}
+#bellHint.show{opacity:1;transform:translate(-50%,0)}
+#bellHint .bh-arrow{color:var(--gold);font-size:14px;line-height:1;letter-spacing:0;
+  animation:bhBlink 1.9s ease-in-out infinite}
+@keyframes bhBlink{0%,100%{opacity:.3;transform:translateY(-3px)}50%{opacity:1;transform:translateY(3px)}}
 
 /* -- fiche film - DA " affiche de film " -- */
 #detail{position:fixed;inset:0;z-index:400;display:none}
@@ -215,6 +225,17 @@ body:not(.hand) .stamp-title{color:var(--gold)}
   background:linear-gradient(rgba(244,237,222,.98),rgba(240,232,215,.94));backdrop-filter:blur(6px);
   padding:clamp(12px,1.8vw,20px) clamp(18px,4vw,54px);border-bottom:1px dashed rgba(46,37,24,.35);
   font-size:12px;letter-spacing:.24em;font-weight:700;color:var(--dim)}
+/* boutons des barres hautes (fiche film + panneaux) : discrets, mais vrais boutons.
+   padding compense par des marges negatives : la cible grandit sans deplacer le texte. */
+.dnav-btn{display:inline-flex;align-items:center;gap:7px;background:none;border:0;margin:0;
+  padding-block:8px;margin-block:-8px;
+  font:inherit;letter-spacing:inherit;font-weight:700;color:inherit;text-transform:uppercase;cursor:pointer;
+  transition:color .2s}
+.dnav-btn:not(.dnav-close){padding-inline:10px;margin-inline:-10px}
+.dnav-btn:hover,.dnav-btn:focus-visible{color:var(--rouge)}
+.detail-top .dnav-btn{pointer-events:auto}   /* #detail (z-index 400) passe au-dessus du header : OK */
+.dnav-count{font-variant-numeric:tabular-nums;opacity:.75}
+.dnav-close{margin-left:auto}
 /* zone defilante : tout le contenu de l'affiche passe SOUS la barre fixe */
 .detail-scroll{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   padding:clamp(20px,4vw,48px) clamp(18px,4vw,54px) clamp(24px,4vw,52px)}
@@ -354,7 +375,8 @@ body:not(.hand) .stamp-title{color:var(--gold)}
 .panel .skill-list b{color:var(--creme-dim)}
 /* le billet de contact, pose sur le papier */
 .panel .ticket{background:var(--paper);color:var(--creme);border:1px solid #b7a482;
-  box-shadow:0 0 0 5px rgba(46,37,24,.06),0 22px 48px -24px rgba(20,16,10,.6)}
+  box-shadow:0 0 0 5px rgba(46,37,24,.06),0 22px 48px -24px rgba(20,16,10,.6);
+  flex:0 0 auto}   /* jamais compresse par .panel-body : sinon EMAIL / GITHUB sont rognes */
 .panel .ticket-num,.panel .ticket-meta label{color:var(--creme-dim)}
 .panel .ticket-meta a{color:var(--creme)}
 .panel .ticket-right{background:#171310;color:var(--paper)}
@@ -411,3 +433,107 @@ body:not(.hand) .stamp-title{color:var(--gold)}
     gap:clamp(8px,1.4vh,14px) clamp(14px,3vw,28px)}
 }
 body.panel-open{cursor:default}
+
+/* =============================================================
+   RESPONSIVE UNIVERSEL - adaptation a TOUS les appareils
+   - encoches / Dynamic Island / barre gestuelle : env(safe-area-inset-*)
+   - telephone en paysage (ecrans tres courts) : le menu ne deborde plus
+   - zones tactiles suffisantes sur ecrans tactiles
+   - typo iOS non agrandie automatiquement en paysage
+   Tout repose sur des variables, avec 0px en repli : rien ne casse
+   sur un navigateur qui ne gere pas env().
+   ============================================================= */
+:root{
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);
+  --sar:env(safe-area-inset-right,0px);
+}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+a,button,summary{touch-action:manipulation}
+
+/* la barre noire du haut passe SOUS l'encoche, le contenu reste en dessous ;
+   la barre du bas couvre la barre gestuelle (home indicator) */
+#siteHeader{height:calc(var(--bar) + var(--sat));
+  padding:var(--sat) max(18px,var(--sar)) 0 max(18px,var(--sal))}
+.cine-bar--top{height:calc(var(--bar) + var(--sat))}
+.cine-bar--bottom{height:calc(var(--bar) + var(--sab))}
+
+/* en paysage, aucune information ne doit se retrouver sous l'encoche laterale */
+.hero{padding-top:calc(var(--bar) + var(--sat) + 34px);
+  padding-left:max(clamp(18px,5vw,70px),var(--sal));
+  padding-right:max(clamp(18px,5vw,70px),var(--sar))}
+.panel{padding:calc(var(--bar) + var(--sat)) max(9px,var(--sar)) var(--sab) max(9px,var(--sal))}
+.panel-top{padding-left:max(clamp(18px,4vw,54px),var(--sal));
+  padding-right:max(clamp(18px,4vw,54px),var(--sar))}
+.panel-body{padding-left:max(clamp(18px,4vw,54px),var(--sal));
+  padding-right:max(clamp(18px,4vw,54px),var(--sar));
+  padding-bottom:calc(clamp(14px,3vh,56px) + var(--sab))}
+.detail-sheet{inset:4vh max(4vw,var(--sar)) 4vh max(4vw,var(--sal))}
+.detail-top{padding-left:max(clamp(18px,4vw,54px),var(--sal));
+  padding-right:max(clamp(18px,4vw,54px),var(--sar))}
+.detail-scroll{padding-left:max(clamp(18px,4vw,54px),var(--sal));
+  padding-right:max(clamp(18px,4vw,54px),var(--sar));
+  padding-bottom:calc(clamp(24px,4vw,52px) + var(--sab))}
+#ticketBar{bottom:calc(var(--bar) + 16px + var(--sab))}
+@media(max-width:700px){#ticketBar{bottom:calc(var(--bar) + 10px + var(--sab))}}
+#noWebgl{padding:max(24px,var(--sat)) max(24px,var(--sar)) max(24px,var(--sab)) max(24px,var(--sal))}
+
+/* menu mobile : taille indexee aussi sur la HAUTEUR, donc jamais coupe
+   (meme sur un telephone en paysage, type 568x320 ou 844x390) */
+#mobileMenu{overflow:auto;
+  padding:calc(58px + var(--sat)) max(20px,var(--sar)) calc(22px + var(--sab)) max(20px,var(--sal))}
+#mobileMenu a{font-size:clamp(28px,min(11vw,12vh),104px);line-height:1.08}
+#menuClose{top:calc(16px + var(--sat));right:max(16px,var(--sar))}
+
+/* ecrans tres courts (paysage telephone) : on resserre la barre et le menu */
+@media(max-height:430px){
+  :root{--bar:48px}
+  #mobileMenu{justify-content:flex-start;gap:2px}
+  #mobileMenu p{display:none}
+  .hero{padding-top:calc(var(--bar) + var(--sat) + 16px)}
+  /* le billet de contact et le pied de page se compactent pour tenir en hauteur */
+  .panel .ticket-left h3{font-size:clamp(24px,min(6vw,7vh),84px)}
+  .panel .footer{padding-top:10px;padding-bottom:12px;font-size:11px}
+  .panel .footer-credits{line-height:1.5}
+}
+
+/* la boite du loader ne doit jamais depasser en hauteur (paysage) */
+.loader-frame{width:min(460px,86vw,calc(86vh*.8))}
+
+/* zones tactiles : sur un ecran au doigt, on agrandit la cible de clic
+   sans changer l'apparence (padding transparent) */
+@media(pointer:coarse){
+  .main-nav a{padding-block:15px}
+  .sound-btn,#menuBtn{padding:14px 13px;min-height:44px;display:inline-flex;align-items:center}
+  #menuClose{padding:12px 16px}
+  /* 44px minimum partout (recommandation WCAG 2.5.5 / Apple HIG) */
+  .brand{padding:9px;margin-inline:-9px}
+  .btn{padding-top:14px;padding-bottom:14px}
+  /* .panel .btn--small (specificite superieure) doit etre surcharge explicitement */
+  .btn--small,.panel .btn--small{padding-top:14px;padding-bottom:14px}
+  .btn--stamp{padding-top:14px;padding-bottom:14px}
+  #mobileMenu a{padding-block:5px}
+  /* lien texte du billet : cible agrandie de facon neutre (les marges annulent le padding) */
+  .ticket-meta a{padding:15px 0;margin-top:-15px;margin-bottom:-15px}
+  .dnav-btn{padding-block:14px;margin-block:-14px}
+  /* fleches precedente/suivante : la cible s'elargit sans deplacer le texte.
+     margin-left:auto du bouton FERMER est preserve en l'excluant. */
+  .dnav-btn:not(.dnav-close){padding-inline:15px;margin-inline:-15px}
+}
+
+/* un seul en-tete doit rester compact pour que les 2 lignes de la barre tiennent */
+@media(max-width:480px){
+  .detail-top,.panel-top{gap:9px 10px;font-size:10px;letter-spacing:.15em}
+  .detail-stamp,.panel-stamp{width:44px;height:44px}
+}
+
+/* ecrans courts (portable, paysage telephone) : la barre du tampon passe
+   en "space-between" -> texte a gauche, bouton a droite, plus de chevauchement
+   avec la pile ni avec le billet tenu en main.
+   940px : au-dela, la pile projetee est assez haute dans l'ecran pour ne plus
+   croiser le texte centre de la barre (verifie par projection). */
+@media(max-height:940px){
+  #ticketBar{justify-content:space-between}
+  .stamp-meta{margin-right:0}
+}
