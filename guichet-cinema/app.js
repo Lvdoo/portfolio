@@ -4,12 +4,11 @@
    tamponne-le -> la fiche " film " s'ouvre.
    =================================================================== */
 
-/* -- CONFIG - * modifie ici : email, nom, liens, son -- */
+/* -- CONFIG - * modifie ici : email, nom, liens -- */
 const CONFIG = {
   name: "Ludovic LI",
   email: "LUDO.CREATIVE@EMAIL.COM", // <- remplace par le vrai email
   github: "https://github.com/Lvdoo",
-  sound: true,
 };
 
 /* -- LES 6 FILMS (projets) ------------------------------------------
@@ -151,60 +150,33 @@ function seedRng(seed){
   return ()=> { s ^= s<<13; s ^= s>>>17; s ^= s<<5; return ((s>>>0)%1000)/1000; };
 }
 
-/* ================== Sons discrets (WebAudio, zero fichier) ================== */
-const snd = (() => {
-  let ctx = null, on = CONFIG.sound;
-  const ensure = () => {
-    if(!ctx){ try{ ctx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ ctx=null; } }
-    if(ctx && ctx.state === "suspended") ctx.resume();
-    return ctx;
-  };
-  const tone = (f0,dur,type,gain,f1) => {
-    if(!on || !ensure()) return;
-    const t0 = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(f0,t0);
-    if(f1) o.frequency.exponentialRampToValueAtTime(f1, t0+dur);
-    g.gain.setValueAtTime(0.0001,t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0+0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
-    o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0+dur+0.05);
-  };
-  const noise = (dur,gain,cut) => {
-    if(!on || !ensure()) return;
-    const t0 = ctx.currentTime, len = Math.max(1, Math.floor(ctx.sampleRate*dur));
-    const buf = ctx.createBuffer(1,len,ctx.sampleRate), d = buf.getChannelData(0);
-    for(let i=0;i<len;i++) d[i] = (Math.random()*2-1)*(1-i/len);
-    const s = ctx.createBufferSource(); s.buffer = buf;
-    const f = ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value = cut;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(gain,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-    s.connect(f).connect(g).connect(ctx.destination); s.start(t0);
-  };
-  return {
-    on: () => on,
-    unlock: () => { ensure(); },
-    toggle(){ on = !on; if(on) ensure(); return on; },
-    hover(){ tone(1250,.04,"triangle",.011); },
-    pick(){ tone(300,.18,"sine",.05,680); noise(.05,.012,3200); },
-    paper(){ tone(950,.05,"triangle",.018); noise(.03,.014,2400); },
-    stamp(){ tone(80,.25,"sine",.16,55); noise(.16,.12,720); },
-    put(){ tone(540,.16,"sine",.05,300); },
-    open(){ tone(420,.22,"sine",.05,980); },
-    bell(){ tone(1180,.45,"sine",.05,1560); tone(1760,.35,"triangle",.028); },   // la cloche du guichet
-  };
-})();
+
 
 /* ================== Elements DOM ================== */
 const stage = $("#stage"), grain = $("#grain");
-const loaderCount = $("#loaderCount"), loaderPct = $("#loaderPct");
-const hint = $("#guichetHint"), ticketBar = $("#ticketBar");
-const stampTitle = $("#stampTitle"), stampCounter = $("#stampCounter"), stampBtn = $("#stampBtn");
+const loaderCount = $("#loaderCount");
+const ticketBar = $("#ticketBar");
+const stampTitle = $("#stampTitle"), stampBtn = $("#stampBtn"), stampMeta = $("#stampMeta");
 const bellHint = $("#bellHint");
 const detail = $("#detail"), detailSheet = $("#detailSheet"), detailScroll = $("#detailScroll"), noWebgl = $("#noWebgl");
+const projectListEl = $("#projectList");
+
+/* ================== Taille REELLE de la surface de rendu ==================
+   Le canvas est en position:fixed;inset:0 : sa boite CSS EST le viewport de mise en page.
+   C'est donc LUI qui fait foi, et pas window.innerWidth/innerHeight, qui sur iOS bougent
+   avec la barre d'URL, le zoom ou le clavier virtuel. Mesurer le canvas garde toujours
+   d'accord la taille du canvas, le ratio de la camera et la taille du tampon de dessin.
+   Repli sur innerWidth/innerHeight tant que le canvas n'a pas ete mesure. */
+function viewSize(){
+  const w = (stage && stage.clientWidth)  || innerWidth  || 1;
+  const h = (stage && stage.clientHeight) || innerHeight || 1;
+  return {w, h};
+}
+function viewAspect(){ const s = viewSize(); return s.w/s.h; }
 
 /* ================== Medias (prechargement) ================== */
 const MEDIA = new Map(); // src -> {kind:'image'|'video'|'missing', el, ok}
-let loadedCount = 0, assetsReady = false, buildStarted = false;
+let loadedCount = 0, buildStarted = false;
 const uniqueSrcs = [...new Set(PROJECTS.flatMap(p => [p.front.src, p.back.src]))];
 const TOTAL = uniqueSrcs.length;
 
@@ -228,40 +200,82 @@ function preloadOne(src){
       const im = new Image();
       im.onload = () => record("image", im, true);
       im.onerror = () => record("image", im, false);
+      setTimeout(() => record("image", im, false), 8000);   // garde-fou : reseau gele = "manquant", jamais bloque
       im.src = src;
     }
   });
 }
-async function preloadAll(){ await Promise.all(uniqueSrcs.map(preloadOne)); assetsReady = true; maybeFinish(); }
+async function preloadAll(){ await Promise.all(uniqueSrcs.map(preloadOne)); assetsReady = true; updateLoaderProgress(); }
 
 function unlockMedia(){
-  snd.unlock();
   for(const m of MEDIA.values()){
     if(m.kind === "video" && m.el && m.el.paused) m.el.play().catch(()=>{});
   }
 }
 
-/* ================== Loader ================== */
-let loaderDone = false, minElapsed = false;
-setTimeout(() => { minElapsed = true; maybeFinish(); }, 2400);
-let n = 3;
-loaderCount.textContent = n;
-setInterval(() => { if(n > 1){ n--; loaderCount.textContent = n; } }, 780);
+/* ================== Loader (compte a rebours 3-2-1) ==================
+   Le chargement n'affiche QUE les chiffres 3 -> 2 -> 1 (aucun logo " play ").
+   Le rythme est volontairement court ; si les ressources (medias, polices, scene)
+   ne sont pas pretes au dernier " 1 ", on PATIENTE sans forcer : la scene ne
+   s'ouvre jamais tant qu'elle n'est pas utilisable. Des qu'elles sont pretes
+   (assetsReady + fontsLoaded + sceneBuilt), on revele le portfolio - sans attendre
+   un temps artificiel inutile. */
+let loaderDone = false, fontsLoaded = false, sceneBuilt = false, assetsReady = false;
+let num = 3, numAt = performance.now(), numTimer = 0;
+const STEP = 700;
+const LOADER_HARD_TIMEOUT = 12000;              // garde-fou : jamais bloque indefiniment
+function renderCount(v){
+  if(!loaderCount) return;
+  /* Un <b> frais a chaque chiffre : l'animation CSS se rejoue (fondu + montee),
+     sans reconstruire la mise en page ni laisser l'ancien chiffre visible. */
+  loaderCount.textContent = "";
+  const el = document.createElement("b");
+  el.textContent = String(v);
+  loaderCount.appendChild(el);
+}
 function updateLoaderProgress(){
-  loaderPct.textContent = Math.min(99, Math.round(loadedCount/TOTAL*100)) + "%";
+  if(loaderDone) return;
+  tickCountdown();
+}
+function allReady(){ return assetsReady && fontsLoaded && sceneBuilt; }
+function tickCountdown(){
+  if(loaderDone) return;
+  const wait = STEP - (performance.now() - numAt);
+  if(wait > 0){ clearTimeout(numTimer); numTimer = setTimeout(tickCountdown, wait + 10); return; }
+  if(num === 1){
+    /* Dernier chiffre affiche : on ne repart pas en boucle sur " 3 ".
+       On attend simplement les ressources puis on revele. */
+    maybeFinish();
+    return;
+  }
+  num--;
+  numAt = performance.now();
+  renderCount(num);
+  numTimer = setTimeout(tickCountdown, STEP + 10);
 }
 function maybeFinish(){
-  if(loaderDone || !assetsReady || !minElapsed) return;
+  if(loaderDone) return;
+  if(!allReady()) return;                        // ressources pas pretes : on patiente
   loaderDone = true;
-  loaderPct.textContent = "100%";
-  // visuel "play" du cinema (dessine en CSS, aucun caractere special, non cliquable) :
-  // simple signal de demarrage, le site s'ouvre tout seul juste apres
-  loaderCount.textContent = "";
-  const play = document.createElement("span");
-  play.className = "loader-play"; play.setAttribute("aria-hidden","true");
-  loaderCount.appendChild(play);
-  setTimeout(() => document.body.removeAttribute("data-loading"), 1200);
+  clearTimeout(numTimer);
+  renderCount(1);                                // on s'arrete bien sur " 1 "
+  setTimeout(() => {
+    document.body.removeAttribute("data-loading");
+    document.body.removeAttribute("aria-busy");
+  }, 400);
 }
+renderCount(num);
+updateLoaderProgress();
+/* Garde-fou : au pire des cas (CDN de polices bloque, WebGL plante...), on n'expose
+   JAMAIS une scene inutilisable, mais on ne laisse pas non plus l'utilisateur bloque
+   sur le compte a rebours : apres le delai, on revele ce qui est pret. */
+setTimeout(() => {
+  if(loaderDone) return;
+  console.warn("[box office] loader: forcing reveal after", LOADER_HARD_TIMEOUT, "ms",
+    {assetsReady, fontsLoaded, sceneBuilt});
+  assetsReady = fontsLoaded = sceneBuilt = true;
+  maybeFinish();
+}, LOADER_HARD_TIMEOUT);
 
 /* ================== Papier + dessin des tickets ================== */
 const PW = 1600, PH = 960;
@@ -489,26 +503,50 @@ function drawStamp(ctx,cx,cy,scale,alpha,date){
   ctx.restore();
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
+/* Mesure du rectangle reellement couvert par un media dans une zone.
+   Une VIDEO n'est jamais rognee : on prend son propre ratio (16:9, 4:3, vertical...
+   le demo TeruBot est un 480x848 VERTICAL) et on inscrit ce rectangle dans la zone -
+   le cadre du billet se pose alors SUR la video, qui reste entiere, sans deformation
+   et sans decoupe. Les images gardent le comportement " cover " du grand cadre. */
+function mediaFitRect(el, x, y, w, h){
+  const sw = el.videoWidth || el.naturalWidth || el.width || 0;
+  const sh = el.videoHeight || el.naturalHeight || el.height || 0;
+  if(!sw || !sh) return {x, y, w, h};
+  const s = Math.min(w/sw, h/sh);
+  const dw = Math.round(sw*s), dh = Math.round(sh*s);
+  return { x: x + Math.round((w-dw)/2), y: y + Math.round((h-dh)/2), w: dw, h: dh };
+}
+/* Dessine le media et RENVOIE le rectangle couvert (cadre + coins dores + legende
+   se calent dessus). */
 function drawMedia(t,ctx,x,y,w,h,spec,active){
-  rr(ctx,x,y,w,h,10); ctx.save(); ctx.clip();
-  try{
-    const info = getMedia(spec.src);
-    if(info.kind === "missing") drawReserved(ctx,x,y,w,h,spec,t.p.accent,active);
-    else if(info.kind === "video"){
-      if(info.el && info.el.readyState >= 2) drawCover(ctx,info.el,x,y,w,h);
-      else { ctx.fillStyle = "#0c0c0e"; ctx.fillRect(x,y,w,h); ctx.fillStyle = "#8b8577"; ctx.font = fBodyFont(600,15); ctx.fillText("LOADING...", x+20, y+h/2); }
-    } else if(info.el) drawCover(ctx,info.el,x,y,w,h);
-    else { ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h); }
-  }catch(e){
-    ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);          // zone media jamais transparente
-    ctx.fillStyle = "#8b8577"; ctx.font = fBodyFont(600,15);
-    ctx.fillText("IMAGE COMING SOON", x+20, y+h/2);
-    console.warn("[box office] drawMedia fallback for", spec.src, e);
+  const info = getMedia(spec.src);
+  const vid = (info.kind === "video" && info.el && info.el.readyState >= 2) ? info.el : null;
+  const box = vid ? mediaFitRect(vid, x, y, w, h) : {x, y, w, h};
+  if(vid){
+    // video : cadre sombre = rectangle exact de la video (letterbox inutile, ratio respecte)
+    ctx.fillStyle = "#0c0c0e"; ctx.fillRect(box.x, box.y, box.w, box.h);
+    try{ ctx.drawImage(vid, box.x, box.y, box.w, box.h); }catch(_){}
+  } else {
+    rr(ctx,x,y,w,h,10); ctx.save(); ctx.clip();
+    try{
+      if(info.kind === "missing") drawReserved(ctx,x,y,w,h,spec,t.p.accent,active);
+      else if(info.kind === "video"){
+        ctx.fillStyle = "#0c0c0e"; ctx.fillRect(x,y,w,h); ctx.fillStyle = "#8b8577"; ctx.font = fBodyFont(600,15); ctx.fillText("LOADING...", x+20, y+h/2);
+      }
+      else if(info.el) drawCover(ctx,info.el,x,y,w,h);
+      else { ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h); }
+    }catch(e){
+      ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);          // zone media jamais transparente
+      ctx.fillStyle = "#8b8577"; ctx.font = fBodyFont(600,15);
+      ctx.fillText("IMAGE COMING SOON", x+20, y+h/2);
+      console.warn("[box office] drawMedia fallback for", spec.src, e);
+    }
+    ctx.restore();
   }
-  ctx.restore();
   ctx.strokeStyle = active ? t.p.accent : "rgba(20,18,16,.35)";
   ctx.lineWidth = active ? 3 : 1.5;
-  rr(ctx,x,y,w,h,10); ctx.stroke();
+  rr(ctx, box.x, box.y, box.w, box.h, vid ? 6 : 10); ctx.stroke();
+  return box;
 }
 
 function drawFrontCore(t, active){
@@ -526,86 +564,92 @@ function drawFrontCore(t, active){
   ctx.fillStyle = hexA(accent,.4); ctx.fillRect(W-9,0,9,H);
 
   // --- bandeau cinema ---
-  capsFill(ctx,"LUDO CINEMA - OFFICIAL BOX OFFICE", W/2, 44, {px:19,color:ink,ls:6,align:"center",baseline:"middle"});
-  ctx.font = serif(700,22); ctx.textAlign = "center"; ctx.fillStyle = accent;
+  /* Tailles de texte : le billet fait 1,5 m x 0,9 m en scene, sa texture ne grandit pas -
+     c'est donc la police qui porte la lisibilite (surtout sur telephone, ou le billet en
+     main ne fait que ~350 px de large). Chaque ligne est recalee juste apres. */
+  capsFill(ctx,"LUDO CINEMA - OFFICIAL BOX OFFICE", W/2, 44, {px:23,color:ink,ls:6.5,align:"center",baseline:"middle"});
+  ctx.font = serif(700,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
   ctx.fillText("*", 98, 46); ctx.fillText("*", W-98, 46);
   ctx.fillStyle = ink; ctx.fillRect(60,74,W-120,1.6);
   ctx.fillStyle = "rgba(46,37,24,.4)"; ctx.fillRect(86,80,W-172,1);
-  capsFill(ctx,"No. " + p.num, 58, 118, {px:13,color:faded,ls:4});
-  capsFill(ctx,"ADMIT ONE - ONE SEAT PER TICKET", W-58, 118, {px:12,color:faded,ls:3,align:"right"});
+  capsFill(ctx,"No. " + p.num, 58, 118, {px:15,color:faded,ls:4.5});
+  /* ancre a GAUCHE de la perforation (seamX-24), comme PROJECTIONIST'S STAMP au verso :
+     a 14,5px la mention mesure 339px et, alignee a droite sur W-58, elle entamerait
+     le talon de 13px - le filet de dechirure passerait dans les lettres. */
+  capsFill(ctx,"ADMIT ONE - ONE SEAT PER TICKET", seamX-24, 118, {px:14.5,color:faded,ls:3,align:"right"});
 
   // --- titre du film (impression letterpress : double passe) ---
-  ctx.font = serif(400,21); ctx.textAlign = "center"; ctx.fillStyle = accent;
+  ctx.font = serif(400,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
   ctx.fillText("PRESENTS", cxm, 190);
-  ctx.font = serif(700,80); ctx.textBaseline = "alphabetic";
+  ctx.font = serif(700,88); ctx.textBaseline = "alphabetic";
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1060);
   let ty = 268;
   tl.slice(0,2).forEach(l => {
     ctx.fillStyle = "rgba(46,37,24,.30)"; ctx.fillText(l, cxm+2.5, ty+3);   // passe en creux
     ctx.fillStyle = ink; ctx.fillText(l, cxm, ty);
-    ty += 74;
+    ty += 80;
   });
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(cxm-170, ty); ctx.lineTo(cxm+170, ty); ctx.stroke();
-  ctx.font = serif(700,18); ctx.fillStyle = accent;
+  ctx.font = serif(700,21); ctx.fillStyle = accent;
   const dl = wrapLines(ctx, p.domain.toUpperCase(), 1060);
   ctx.fillText(dl[0]||"", cxm, ty+40);
 
   // --- photo facon " carte de lobby " (grand format) ---
-  const my = Math.min(ty + 58, 480), mh = 746 - my, mx = 70, mw = seamX - mx - 30;
-  drawMedia(t, ctx, mx, my, mw, mh, p.front, active);
+  const my = Math.min(ty + 60, 480), mh = 746 - my, mx = 70, mw = seamX - mx - 30;
+  const box = drawMedia(t, ctx, mx, my, mw, mh, p.front, active);   // rectangle REEL du media
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.4;
-  rr(ctx, mx-7, my-7, mw+14, mh+14, 4); ctx.stroke();      // double cadre
-  photoCorners(ctx, mx, my, mw, mh, "#b08a3e");            // coins dores
-  capsFill(ctx, p.front.cap, cxm, my+mh+20, {px:12,color:faded,ls:2,align:"center"});
+  rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();      // double cadre
+  photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");            // coins dores
+  capsFill(ctx, p.front.cap, box.x + box.w/2, box.y+box.h+20, {px:15,color:faded,ls:2,align:"center"});
 
   // --- mentions tapees (label + valeur, chaque valeur calee dans sa colonne) ---
   const dd = my + mh + 46;
   const cell = [
     ["DATE", p.year],
-    ["SHOWTIME", p.seance.replace(/^SHOWTIME\s*/i, "")],     // le label porte deja SHOWTIME
-    ["ROOM", ROOMS[p.id].replace(/^ROOM\s*/i, "")],          // le label porte deja ROOM
+    ["SHOWTIME", p.seance.replace(/^SHOWTIME\s*/i, "")],
+    ["ROOM", ROOMS[p.id].replace(/^ROOM\s*/i, "")],
     ["RANG", "CODE - PLACE 00" + p.num],
   ];
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   for(let i=0;i<4;i++){
-    const x = 84 + i*266, vx = x+112;              // valeur collee au label
-    ctx.font = fBodyFont(600,15.5); ctx.fillStyle = ink;
+    const x = 84 + i*266, vx = x+112;
+    ctx.font = fBodyFont(600,17.5); ctx.fillStyle = ink;
     ctx.fillText(cell[i][0], x, dd);
     const dw = ctx.measureText(cell[i][0]).width;
-    const lx0 = x+dw+10, lx1 = vx-14;               // pointilles courts entre label et valeur
+    const lx0 = x+dw+10, lx1 = vx-14;
     if(lx1 > lx0){
       ctx.strokeStyle = "rgba(46,37,24,.35)"; ctx.setLineDash([2,5]); ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(lx0, dd-4); ctx.lineTo(lx1, dd-4); ctx.stroke();
       ctx.setLineDash([]);
     }
-    // la valeur ne doit jamais deborder sur la colonne suivante
     const maxW = (i < 3 ? 266 : 300) - 112 - 8;
-    let vf = 15.5; ctx.font = fBodyFont(600,vf);
-    while(ctx.measureText(cell[i][1]).width > maxW && vf > 10){ vf -= .5; ctx.font = fBodyFont(600,vf); }
-    ctx.fillStyle = ink; ctx.fillText(cell[i][1], vx, dd);
+    let vf = 17.5; ctx.font = fBodyFont(600,vf);
+    const val = cell[i][1] || "";
+    while(ctx.measureText(val).width > maxW && vf > 11.5){ vf -= .5; ctx.font = fBodyFont(600,vf); }
+    ctx.fillStyle = ink; ctx.fillText(val, vx, dd);
   }
 
   // --- bas du corps : serie + code + prix ---
   perforation(ctx, 58, 818, seamX-116, "rgba(46,37,24,.5)");
   barcode(ctx, 76, 856, 250, 46, p.num);
-  capsFill(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 922, {px:11,color:faded,ls:2});
+  capsFill(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 922, {px:13,color:faded,ls:2});
   const pxb = seamX-320, pyb = 838;
   ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.setLineDash([7,5]);
   rr(ctx,pxb,pyb,246,84,6); ctx.stroke(); ctx.setLineDash([]);
-  capsFill(ctx,"PRICE", pxb+123, pyb+30, {px:13,color:faded,ls:4,align:"center",baseline:"middle"});
-  ctx.font = serif(700,44); ctx.textAlign = "center"; ctx.fillStyle = ink;
+  capsFill(ctx,"PRICE", pxb+123, pyb+25, {px:14,color:faded,ls:4,align:"center",baseline:"middle"});
+  ctx.font = serif(700,46); ctx.textAlign = "center"; ctx.fillStyle = ink;
   ctx.fillText("12 F", pxb+123, pyb+68);
 
   // --- talon a detacher ---
-  ctx.font = serif(700,26); ctx.textAlign = "center";
+  ctx.font = serif(700,29); ctx.textAlign = "center";
   ctx.fillStyle = ink; ctx.fillText("SOUVENIR", seamX+176, 96);
-  ctx.font = serif(700,30); ctx.fillText("ADMIT ONE", seamX+176, 160);
+  ctx.font = serif(700,34); ctx.fillText("ADMIT ONE", seamX+176, 160);
   rosette(ctx, seamX+176, 264, 46, ink);
-  capsFill(ctx,"USHER", seamX+176, 344, {px:11,color:faded,ls:3,align:"center"});
-  ctx.font = serif(700,24); ctx.fillStyle = "#c22b27"; ctx.fillText("No. " + p.num, seamX+176, 400);
+  capsFill(ctx,"USHER", seamX+176, 344, {px:13,color:faded,ls:3,align:"center"});
+  ctx.font = serif(700,27); ctx.fillStyle = "#c22b27"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "S"+p.num);
-  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:11,color:faded,ls:3,align:"center"});
+  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:faded,ls:3,align:"center"});
 
   // --- dechirures + encoches ---
   const rip = "rgba(46,37,24,.16)";
@@ -641,49 +685,51 @@ function drawBackCore(t, active){
   ctx.fillStyle = hexA(accent,.4); ctx.fillRect(W-9,0,9,H);
 
   // --- en-tete verso ---
-  capsFill(ctx,"TICKET - BACK",58,54,{px:16,color:cream,ls:4});
-  capsFill(ctx,"No. " + p.num + " - LL",W-58,54,{px:15,color:cream,ls:3,align:"right"});
+  capsFill(ctx,"TICKET - BACK",58,54,{px:19,color:cream,ls:4});
+  capsFill(ctx,"No. " + p.num + " - LL",W-58,54,{px:17.5,color:cream,ls:3,align:"right"});
   dashedLine(ctx,58,84,seamX-116,"rgba(239,233,220,.22)",10,6);
 
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";   // ! remis a chaque redraw (sinon reste "center")
-  ctx.font = fBodyFont(700,19); ctx.fillStyle = hexA(accent,.95);
+  ctx.font = fBodyFont(700,22); ctx.fillStyle = hexA(accent,.95);
   ctx.fillText("No. " + p.num + " - " + p.domain.toUpperCase(), 58, 122);
 
   // --- titre + tagline ---
-  ctx.font = serif(700,54); ctx.fillStyle = cream;
+  ctx.font = serif(700,58); ctx.fillStyle = cream;
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1040);
   let ty = 224;
-  tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 56; });
-  ctx.font = fQuoteFont(23); ctx.fillStyle = accent;
+  tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 60; });
+  ctx.font = fQuoteFont(26); ctx.fillStyle = accent;
   const ql = wrapLines(ctx, p.tagline, 1000);
   let qy = ty + 4;
-  ql.slice(0,2).forEach(l => { ctx.fillText(l,58,qy); qy += 28; });
+  ql.slice(0,2).forEach(l => { ctx.fillText(l,58,qy); qy += 31; });
 
   // --- media verso (grand format) ---
   const my = Math.min(qy + 16, 400), mh = 632 - my, mx = 58, mw = seamX - mx - 30;
-  drawMedia(t, ctx, mx, my, mw, mh, p.back, active);
+  const box = drawMedia(t, ctx, mx, my, mw, mh, p.back, active);   // rectangle REEL du media
   ctx.strokeStyle = "rgba(239,233,220,.35)"; ctx.lineWidth = 1.4;
-  rr(ctx, mx-7, my-7, mw+14, mh+14, 4); ctx.stroke();
-  photoCorners(ctx, mx, my, mw, mh, "#b08a3e");
-  capsFill(ctx, p.back.cap, cxm, my+mh+18, {px:12,color:dim,ls:2,align:"center"});
+  rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();
+  photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");
+  capsFill(ctx, p.back.cap, box.x + box.w/2, box.y+box.h+18, {px:15,color:dim,ls:2,align:"center"});
 
   // --- synopsis tape ---
-  ctx.font = fBodyFont(500,19); ctx.fillStyle = "#d8d1c2";
+  ctx.font = fBodyFont(500,22); ctx.fillStyle = "#d8d1c2";
   const bl = wrapLines(ctx, p.blurb, 1050);
   let dy = my + mh + 46;
-  bl.slice(0,5).forEach(l => { ctx.fillText(l,58,dy); dy += 29; });
+  bl.slice(0,5).forEach(l => { ctx.fillText(l,58,dy); dy += 32; });
 
   // --- chips outils ---
-  const chipsY = Math.min(dy + 20, 856), chipH = 34;
+  /* le plafond 830 (et non 856) garantit que les pastilles ne croisent jamais
+     la perforation (y=872) ni le bas du synopsis, meme avec 5 lignes de texte */
+  const chipsY = Math.min(dy + 20, 830), chipH = 38;
   let cx = 58;
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  ctx.font = fBodyFont(700,13.5);
+  ctx.font = fBodyFont(700,15.5);
   for(const tool of p.tools){
-    const tw = ctx.measureText(tool).width + 34;
+    const tw = ctx.measureText(tool).width + 38;
     if(cx + tw > seamX - 210){ cx = 58; break; }
     ctx.fillStyle = hexA(accent,.18);
     rr(ctx,cx,chipsY,tw,chipH,chipH/2); ctx.fill();
-    ctx.fillStyle = cream; ctx.fillText(tool, cx+17, chipsY+chipH/2+5);
+    ctx.fillStyle = cream; ctx.fillText(tool, cx+19, chipsY+chipH/2+6);
     cx += tw + 10;
   }
 
@@ -693,18 +739,18 @@ function drawBackCore(t, active){
   // --- pied verso ---
   perforation(ctx, 58, 872, seamX-160, "rgba(239,233,220,.3)");
   barcode(ctx, 58, 906, 200, 36, "V"+p.num);
-  capsFill(ctx,"PROJECTIONIST'S STAMP", seamX-40, 904, {px:13,color:accent,ls:2,align:"right"});
-  capsFill(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 928, {px:11,color:dim,ls:2,align:"right",weight:500});
+  capsFill(ctx,"PROJECTIONIST'S STAMP", seamX-40, 904, {px:15,color:accent,ls:2,align:"right"});
+  capsFill(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 928, {px:13,color:dim,ls:2,align:"right",weight:500});
 
   // --- talon verso ---
-  ctx.font = serif(700,26); ctx.textAlign = "center";
+  ctx.font = serif(700,29); ctx.textAlign = "center";
   ctx.fillStyle = cream; ctx.fillText("SOUVENIR", seamX+176, 96);
-  ctx.font = serif(700,30); ctx.fillText("ADMIT ONE", seamX+176, 160);
+  ctx.font = serif(700,34); ctx.fillText("ADMIT ONE", seamX+176, 160);
   rosette(ctx, seamX+176, 264, 46, "rgba(239,233,220,.7)");
-  capsFill(ctx,"USHER", seamX+176, 344, {px:11,color:dim,ls:3,align:"center"});
-  ctx.font = serif(700,24); ctx.fillStyle = "#c97a72"; ctx.fillText("No. " + p.num, seamX+176, 400);
+  capsFill(ctx,"USHER", seamX+176, 344, {px:13,color:dim,ls:3,align:"center"});
+  ctx.font = serif(700,27); ctx.fillStyle = "#c97a72"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "V"+p.num);
-  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:11,color:dim,ls:3,align:"center"});
+  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:dim,ls:3,align:"center"});
 
   // --- dechirures + encoches ---
   const rip = "rgba(0,0,0,.32)";
@@ -784,15 +830,19 @@ let boothClockHands = null;                   // aiguilles de l'horloge de la ca
 let boothClock = null;                        // groupe de l'horloge (repositionne a gauche de la plaque BOX OFFICE)
 let boothCesar = null;                        // statuette CESAR posee sur le comptoir (repositionnee a droite de l'affiche rouge)
 let boothOscar = null;                        // statuette OSCAR posee juste a cote du Cesar, sur le comptoir
-let boothWinOuter = 1.69;                     // bord exterieur du cadre de fenetre (repere)
-let tickets = [], focused = null, hovered = null, dragging = false, lastDrag = null;
+let boothTarifs = null;                       // pancarte des tarifs (chevalet sur le comptoir, repositionne par placeTarifs)
+let awardTaken = null, awardHover = null, awardDrag = false;   // trophee en main / survolee / en train d'etre tourne au pointeur
+let awardNext = null;   // prise en attente : la statuette en main se RANGE d'abord, puis celle-ci monte
+let tickets = [], hovered = null, dragging = false, lastDrag = null;
 let heroActive = false, detailOpen = false, shake = 0;
 let openPanel = null;                        // panneau plein ecran ouvert (ou null)
 /* v7 - guichet " billet en main " : un seul billet vintage en scene, les autres rejoignent le rang quand on les tamponne */
 let heroIdx = -1, stampedOrder = [], stampingLock = false;   // heroIdx = -1 -> aucun billet en main (pile au repos)
 let pileHover = null, pileGlow = null;
 const PILE_X = 0, PILE_Z = 1.46, PILE_Y = .014;             // pile de billets : centree sur le comptoir
-const CESAR_X0 = 1.85, CESAR_HALF_W = .16, AWARD_GAP = .24;   // statuettes (trophees) posees sur le comptoir ; x affine par placeCesar()
+// Cotes reelles : Cesar 29 cm (base 8 cm), Oscar 34,3 cm (socle noir 13,3 cm) :
+// demi-largeur du Cesar et ecart entre les deux statuettes, au centimetre pres.
+const CESAR_X0 = 1.85, CESAR_HALF_W = .050, AWARD_GAP = .17;   // statuettes (trophees) posees sur le comptoir ; x affine par placeCesar() ; demi-largeur du CESAR (base 9,2 cm -> ~4,6 cm, marge pour les bosses de la compression)
 /* Cloche / rideaux : la cloche posee sur le comptoir OUVRE ou FERME les rideaux. Guichet ferme
    = plus aucune lumiere sauf sur la cloche, et les billets ne sont plus selectionnables. */
 let boothsClosed = true, curtainT = 1;                        // le site DEMARRE rideau ferme (curtainT : 0 = ouvert, 1 = ferme) ; un clic sur la cloche ouvre le guichet
@@ -810,7 +860,22 @@ let cursorSpot = null, cursorBeam = null, cursorGlow = null;  // spot, faisceau 
 let cursorBeamMat = null, cursorGlowMat = null;
 const cursorHit = new THREE.Vector3();                        // point eclaire (recalcule chaque frame)
 const awardEnvMats = [];                                      // materiaux des trophees (reflets adoucis quand ferme)
+let awardSpot = null;                                         // petite source douce qui revele l'or quand un trophee est pris
+const awardSpotV = new THREE.Vector3();                       // scratch : position monde du trophee en main
+/* ---- Gestes tactiles / souris ---------------------------------------------------------
+   Un geste = UN doigt (souris comprise) suivi du pose au leve. On note ou il a commence,
+   quand, et avec quel doigt : c'est ce qui permet de distinguer
+     - un TAP   (deplacement minuscule) -> action (ouvrir une fiche, sonner, reposer...) ;
+     - un SWIPE VERTICAL (coup de doigt franc) -> billet suivant (vers le haut) / precedent
+       (vers le bas), la regle exacte etant isolee dans swipeDir().
+   Sans cette distinction, un swipe qui commencait sur un billet epingle ouvrait sa fiche
+   (clic accidentel), et un geste interrompu par le navigateur laissait l'appui " colle ". */
 let swipeX = 0, swipeY = 0, swipeT = 0;
+let gestureId = null;                        // identifiant du doigt suivi (un seul a la fois)
+let pendingTap = null;                       // action a jouer au leve, SEULEMENT s'il n'y a pas eu de swipe
+let tookAtDown = false;                      // l'appui a DEJA change de billet (sortie de pile, statuette...)
+const TAP_RADIUS_PX = 34;                    // " marge de touche " : rayon en pixels autour d'un objet
+let lastTouchAt = -1e9;                      // date du dernier evenement tactile (filtre les " mouse " fantomes)
 const pointerNdc = { x:0, y:0 };
 const raycaster = new THREE.Raycaster();
 const byId = {};
@@ -826,7 +891,7 @@ function canvasTex(c){
   t.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
   return t;
 }
-function texWood(base,hi,dk){
+function texWood(base,dk){
   // lambris : lames verticales + veinage
   return texCanvas(512,512,(g)=>{
     g.fillStyle = base; g.fillRect(0,0,512,512);
@@ -1027,15 +1092,6 @@ function texSidePoster(n){
     g.strokeStyle = "#c9a54e"; g.lineWidth = 4; g.strokeRect(10,10,320,450);
   });
 }
-function texPlaque(){
-  // plaque " BOX OFFICE 01 "
-  return texCanvas(256,96,(g)=>{
-    g.fillStyle = "#14110c"; rr(g,4,4,248,88,8); g.fill();
-    g.strokeStyle = "#c9a54e"; g.lineWidth = 2.5; rr(g,10,10,236,76,6); g.stroke();
-    g.fillStyle = "#e6c46a"; g.font = '700 28px "Playfair Display", Georgia, serif';
-    g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("BOX OFFICE 01", 128, 50);
-  });
-}
 function texWallPlain(){
   // papier peint " hall de cinema " : bordeaux profond, fines rayures or, motif discret
   return texCanvas(512,512,(g)=>{
@@ -1059,26 +1115,6 @@ function texWallPlain(){
     g.globalAlpha = 1;
   });
 }
-function texLobbyPoster(n){
-  // affiche encadree " COMING SOON " du hall (deux variantes)
-  return texCanvas(300,420,(g)=>{
-    const pal = n ? ["#7a1f1f","#2a0d0d","#e7c96a"] : ["#1f3a6b","#0e1b33","#9ec2ff"];
-    g.fillStyle = "#160f0c"; g.fillRect(0,0,300,420);
-    const grd = g.createLinearGradient(0,70,0,340);
-    grd.addColorStop(0,pal[0]); grd.addColorStop(1,pal[1]);
-    g.fillStyle = grd; g.fillRect(24,70,252,270);
-    g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#e6c46a"; g.font = '700 24px "Playfair Display", Georgia, serif';
-    g.fillText("COMING SOON", 150, 36);
-    g.fillStyle = "#f0e6d2"; g.font = '700 34px "Playfair Display", Georgia, serif';
-    if(n){ g.fillText("LATE", 150, 180); g.fillText("SHOW", 150, 222); }
-    else { g.fillText("GRAND", 150, 180); g.fillText("CLASSIC", 150, 222); }
-    g.fillStyle = pal[2]; g.font = '600 15px Archivo, Arial, sans-serif';
-    g.fillText("LUDO CINEMA - BOX OFFICE 01", 150, 300);
-    g.fillStyle = "#e6c46a"; g.fillText("* * *", 150, 380);
-    g.strokeStyle = "#c9a54e"; g.lineWidth = 3; g.strokeRect(10,10,280,400);
-  });
-}
 function texBoothWall(){
   // papier peint chaud de la cabine
   return texCanvas(512,512,(g)=>{
@@ -1092,25 +1128,6 @@ function texBoothWall(){
     g.globalAlpha = .06; g.fillStyle = "#000";
     for(let i=0;i<700;i++) g.fillRect(Math.random()*512,Math.random()*512,2,2);
     g.globalAlpha = 1;
-  });
-}
-function texBoothPoster(){
-  // affiche encadree au fond de la cabine
-  return texCanvas(320,440,(g)=>{
-    g.fillStyle = "#1c1610"; g.fillRect(0,0,320,440);
-    g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#e7c96a"; g.font = '700 30px "Playfair Display", Georgia, serif';
-    g.fillText("TODAY", 160, 58);
-    const grd = g.createLinearGradient(0,110,0,300);
-    grd.addColorStop(0,"#8a1c1c"); grd.addColorStop(1,"#2a0d0d");
-    g.fillStyle = grd; g.fillRect(34,112,252,188);
-    g.fillStyle = "#f0e6d2"; g.font = '700 26px "Playfair Display", Georgia, serif';
-    g.fillText("LATE", 160, 190);
-    g.fillText("SHOW", 160, 224);
-    g.font = '600 15px Archivo, Arial, sans-serif'; g.fillStyle = "#cdbfa4";
-    g.fillText("CINEMA - BOX OFFICE 01", 160, 344);
-    g.fillText("* * *", 160, 378);
-    g.strokeStyle = "#e7c96a"; g.lineWidth = 3; g.strokeRect(16,16,288,408);
   });
 }
 /* Regle l'horloge de la cabine sur l'heure locale du navigateur (celle de la personne qui regarde). */
@@ -1133,7 +1150,7 @@ function makeBoothInterior(){
   };
   // materiaux (fog:false -> la cabine reste lisible malgre le brouillard du fond)
   const wallM  = new THREE.MeshStandardMaterial({map:canvasTex(texBoothWall()), roughness:.96, side:THREE.DoubleSide, fog:false});
-  const floorM = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#3a2413","#4a2f1a","#1a0f08")), roughness:.92, side:THREE.DoubleSide, fog:false});
+  const floorM = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#3a2413","#1a0f08")), roughness:.92, side:THREE.DoubleSide, fog:false});
   const brassM = new THREE.MeshStandardMaterial({map:canvasTex(texBrass()), roughness:.35, metalness:.85, fog:false});
   const darkM  = new THREE.MeshStandardMaterial({color:0x2a1e14, roughness:.85, fog:false});
 
@@ -1241,126 +1258,485 @@ function getAwardEnv(){
   }catch(e){ awardEnv = null; }
   return awardEnv;
 }
-/* ============ Statuettes de recompense (posees sur le comptoir) ============
-   CESAR : le trophee de l'Academie des Cesar, imagine par le sculpteur Cesar
-   Baldaccini (depuis 1976) - une " COMPRESSION " de bronze naturel poli :
-   un bloc massif aux aretes vives, froisse de plis irreguliers et coiffe d'un
-   sommet ecrase, dresse sur un socle de marbre noir a bague + plaque dorees.
-   OSCAR : le chevalier Art Deco de l'Academy (dessine par Cedric Gibbons,
-   sculpte par George Stanley) - une silhouette stylisee, lisse et sans visage,
-   serrant une epee pointe en BAS, debout sur une BOBINE DE FILM a CINQ RAYONS
-   (les cinq branches de l'Academie), le tout en or poli. */
-function makeCesarStatue(){
-  const g = new THREE.Group();
-  const bronze = new THREE.MeshStandardMaterial({color:0xa87b3c, roughness:.30, metalness:.95, flatShading:true, emissive:0x140d04, emissiveIntensity:.35});
-  const marble = new THREE.MeshStandardMaterial({color:0x0d0b08, roughness:.30, metalness:.30});
-  const plate  = new THREE.MeshStandardMaterial({color:0xcfa757, roughness:.28, metalness:.80, flatShading:true, emissive:0x1e1405, emissiveIntensity:.35});
-
-  // socle de marbre noir : dalle + petit chanfrein, bague doree et plaque gravee
-  const base = new THREE.Mesh(new THREE.BoxGeometry(.235,.052,.205), marble);
-  base.position.y = .026; g.add(base);
-  const bev = new THREE.Mesh(new THREE.BoxGeometry(.213,.010,.183), marble);
-  bev.position.y = .056; g.add(bev);
-  const ring = new THREE.Mesh(new THREE.BoxGeometry(.243,.007,.213), plate);
-  ring.position.y = .0045; g.add(ring);
-  const pla = new THREE.Mesh(new THREE.BoxGeometry(.155,.032,.004), plate);
-  pla.position.set(0,.030,.104); g.add(pla);
-
-  // Cesar : bloc rectangulaire compressé, très anguleux
-  const W = .205, H = .335, D = .175;
-  const geo = new THREE.BoxGeometry(W, H, D, 6, 22, 5);
-  const p = geo.attributes.position;
-  const v = new THREE.Vector3();
-  for(let i=0;i<p.count;i++){
-    v.set(p.getX(i), p.getY(i), p.getZ(i));
-    const y = v.y, t = y/H + .5;
-    let nx = v.x/(W/2), nz = v.z/(D/2);
-    const l = Math.hypot(nx,nz) || 1e-6; nx/=l; nz/=l;
-    const a = Math.atan2(v.z, v.x);
-    const crease = .65*Math.sin(y*28 + a*2.5) + .35*Math.sin(y*52 + a*5.4 + 1.7)
-                 + .22*Math.sin(a*7.8 + y*13)  + .14*Math.sin(a*16 - y*38);
-    const disp  = .016*crease;
-    const taper = 1 - .08*t;
-    p.setX(i, v.x*taper + nx*disp);
-    p.setZ(i, v.z*taper + nz*disp);
-    // sommet très écrasé
-    if(t > .98) p.setY(i, y - .016 - .032*Math.abs(Math.sin(a*2.8)) - .018*Math.abs(Math.sin(a*6.2 + .9)));
-  }
-  geo.computeVertexNormals();
-  const body = new THREE.Mesh(geo, bronze);
-  body.position.y = .062 + H/2;
-  body.rotation.y = .34; body.rotation.z = .015;
-  g.add(body);
-  return g;
+/* ============ PLAQUES GRAVEES DES DEUX TROPHEES ============
+   Les deux socles portent une VRAIE plaque de laiton gravee : un CanvasTexture
+   haute resolution pour la matiere + le MEME dessin en bumpMap (le creux de la
+   gravure capte la lumiere) pose sur une fine plaque geometrique solidaire du
+   socle — jamais du texte flottant devant l'objet.
+   Une seule ligne gravee : la devise du trophée. AUCUN nom personnel (il ne
+   figure que dans la section Contact du site). */
+function plateCanvas(title, sub, w, h){
+  return texCanvas(w, h, (c) => {
+    // --- laiton poli : degrade vertical + fines stries de laiton tourne ---
+    const g = c.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,  "#61471a"); g.addColorStop(.13, "#ad873c");
+    g.addColorStop(.36, "#f0dc9f"); g.addColorStop(.52, "#cda55c");
+    g.addColorStop(.76, "#8b692c"); g.addColorStop(1,  "#4b3711");
+    c.fillStyle = g; c.fillRect(0,0,w,h);
+    c.globalAlpha = .10;
+    for(let i=0;i<170;i++){
+      c.fillStyle = i % 2 ? "#ffffff" : "#241805";
+      c.fillRect(0, (i + Math.random()*.7) * (h/170), w, Math.max(1, h/900));
+    }
+    c.globalAlpha = 1;
+    // --- cadre grave : filet sombre puis filet clair (le relief du cadre) ---
+    const bd = Math.max(3, h*.055);
+    c.strokeStyle = "rgba(26,17,4,.95)"; c.lineWidth = bd;
+    c.strokeRect(bd/2, bd/2, w-bd, h-bd);
+    c.strokeStyle = "rgba(255,243,212,.32)"; c.lineWidth = Math.max(1, bd*.3);
+    c.strokeRect(bd*1.45, bd*1.45, w-bd*2.9, h-bd*2.9);
+    c.textAlign = "center"; c.textBaseline = "middle";
+    const FONT = (px, wt) => wt + " " + px + "px 'Archivo', 'Arial Narrow', Arial, sans-serif";
+    // --- gravure : lumiere au-dessus du creux, matiere sombre au fond, ombre sous le trait ---
+    const engrave = (txt, y, size, weight) => {
+      c.font = FONT(size, weight);
+      c.fillStyle = "rgba(255,248,226,.95)"; c.fillText(txt, w/2, y - size*.075);
+      c.fillStyle = "#1d1302";               c.fillText(txt, w/2, y);
+      c.fillStyle = "rgba(0,0,0,.48)";       c.fillText(txt, w/2, y + size*.07);
+    };
+    // corps de lettre maximal qui tient dans maxW (jamais en dessous de min)
+    const fitFont = (txt, start, maxW, weight, min) => {
+      let s = Math.floor(start);
+      do { s -= 1; c.font = FONT(s, weight); } while(c.measureText(txt).width > maxW && s > min);
+      return s;
+    };
+    if(sub){
+      /* --- plaque a DEUX lignes : le nom (ou le titre) domine, la signature dessous --- */
+      const ft = fitFont(title, h*.34, w*.70, "800", 10);
+      const fs = fitFont(sub,   h*.20, w*.84, "600", 8);
+      // filet separateur grave, large comme la signature
+      const lw = Math.min(w*.62, Math.max(c.measureText(sub).width + ft*2.2, w*.34));
+      c.strokeStyle = "rgba(28,18,5,.55)"; c.lineWidth = Math.max(1, h*.013);
+      c.beginPath(); c.moveTo(w/2-lw/2, h*.55); c.lineTo(w/2+lw/2, h*.55); c.stroke();
+      c.strokeStyle = "rgba(255,243,212,.22)"; c.lineWidth = Math.max(1, h*.006);
+      c.beginPath(); c.moveTo(w/2-lw/2, h*.55 + h*.014); c.lineTo(w/2+lw/2, h*.55 + h*.014); c.stroke();
+      engrave(title, h*.345, ft, "800");
+      engrave(sub,   h*.725, fs, "600");
+    } else {
+      /* --- plaque a UNE ligne : la devise seule se grave bien au centre, en plus
+         grand (il n'y a pas de nom personnel sur les trophees) --- */
+      const ft = fitFont(title, h*.42, w*.82, "800", 10);
+      engrave(title, h*.51, ft, "800");
+    }
+  });
 }
-function makeOscarStatue(){
+/* Materiau de plaque : laiton + bump (le texte part reellement en creux).
+   side Simple (les plaques sont des volumes fermes, pas des plans flottants). */
+function awardPlateMat(title, sub, w, h){
+  const cv = plateCanvas(title, sub, w, h);
+  const map = new THREE.CanvasTexture(cv);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+  const bump = new THREE.CanvasTexture(cv);              // meme dessin, en relief
+  return new THREE.MeshPhysicalMaterial({
+    map, bumpMap: bump, bumpScale: .00055,
+    // emissif discret : le laiton doit rester lisible meme sans envMap (metal presque pur)
+    metalness: .95, roughness: .30, envMapIntensity: .9,
+    emissive:0x1a1206, emissiveIntensity:.22
+  });
+}
+/* Plaque de laiton en volume : un vrai morceau de metal grave pose sur le socle.
+   - le Cesar a un socle CARRE -> plaque PLATE (boite fine, la face avant porte
+     la gravure, les chants sont du laiton) ;
+   - l'Oscar a un socle ROND -> plaque CINTREE (bandeau de cylindre) : une plaque
+     plate " flotterait " de plus d'un centimetre devant la courbure du socle. */
+function awardPlateFace(title, sub){
+  return awardPlateMat(title, sub, 1080, 240);
+}
+function awardPlateMesh(title, sub){
+  const face = awardPlateFace(title, sub);
+  const chant = new THREE.MeshPhysicalMaterial({color:0xb08c46, metalness:.95, roughness:.34, envMapIntensity:.85, emissive:0x1a1206, emissiveIntensity:.20});
+  return new THREE.Mesh(new THREE.BoxGeometry(.074, .0165, .0022),
+    [chant, chant, chant, chant, face, chant]);          // index 4 = face +Z
+}
+function awardPlateCurved(title, sub, radius){
+  const face = awardPlateFace(title, sub);
+  face.side = THREE.DoubleSide;                          // bandeau ouvert : on voit l'exterieur
+  const arc = .074, theta = arc/radius;                  // meme largeur gravee que la plaque plate
+  return new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, .0165, 44, 1, true, -theta/2, theta), face);
+}
+/* --- micro-variation de rugosite pour l'or et le bronze : sans elle, un metal
+   parfaitement uniforme a l'air d'une couleur jaune, pas d'un vrai metal. --- */
+let awardRoughCache = null;
+function awardRoughTex(){
+  if(awardRoughCache) return awardRoughCache;
+  const cv = texCanvas(256,256,(c)=>{
+    c.fillStyle = "#efefef"; c.fillRect(0,0,256,256);     // base ~.94
+    for(let i=0;i<240;i++){
+      const x = Math.random()*256, y = Math.random()*256, r = 5 + Math.random()*36;
+      const v = Math.random() < .5 ? 255 : 186;
+      const gd = c.createRadialGradient(x,y,0,x,y,r);
+      gd.addColorStop(0, "rgba("+v+","+v+","+v+",.13)");
+      gd.addColorStop(1, "rgba("+v+","+v+","+v+",0)");
+      c.fillStyle = gd; c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fill();
+    }
+  });
+  awardRoughCache = new THREE.CanvasTexture(cv);
+  awardRoughCache.wrapS = awardRoughCache.wrapT = THREE.RepeatWrapping;
+  return awardRoughCache;
+}
+/* ============ Statuettes de recompense (posees sur le comptoir) ============
+   CESAR : trophée des Cesar depuis 1977, cree par le sculpteur Cesar Baldaccini
+   — une COMPRESSION d'ornementations de mobilier coulee en bronze dore a la
+   fonderie Bocquel : 29 cm de haut, base de 8 x 8 cm, 3,6 kg, piece CREUSE a
+   l'aspect de " buche doree " aux reliefs ecrases (voir makeCesarStatue).
+   OSCAR : Academy Award of Merit, dessine par Cedric Gibbons et sculpte par
+   George Stanley en 1927 — un chevalier Art Deco SANS VISAGE, bras ramenes
+   devant le corps, tenant verticalement une epee de croise POINTE EN BAS,
+   debout sur une bobine de film a CINQ RAYONS ; 34,3 cm, bronze plaque OR 24
+   carats, socle noir laque de 13,3 cm (voir makeOscarStatue).
+   Les deux socles portent une PLAQUE DE LAITON GRAVEE de leur devise (aucun nom
+   personnel : il n'apparait que dans la section Contact du site) et les
+   statuettes sont CLICABLES (prises " comme un billet " pour etre contemplees).
+   Echelle : 1 unite = 1 metre. Aucun facteur d'echelle : le Cesar mesure .292
+   et l'Oscar .343 dans le monde, comme les vrais. */
+const AWARD_CAPSULE = !!(THREE.CapsuleGeometry);
+function awardCapGeo(r, len){
+  return AWARD_CAPSULE
+    ? new THREE.CapsuleGeometry(r, Math.max(.0008, len), 8, 20)
+    : new THREE.CylinderGeometry(r, r, Math.max(.0008, len), 20, 1, false);
+}
+/* Segment arrondi tendu de a vers b (epaule -> coude, coude -> poignet...) :
+   les extremites sont hemispheriques, donc les raccords de membres sont
+   fondus au lieu de montrer une tranche de cylindre. */
+function awardLimb(a, b, r, mat){
+  const dir = new THREE.Vector3().subVectors(b, a), len = dir.length();
+  const m = new THREE.Mesh(awardCapGeo(r, len), mat);
+  m.position.copy(a).addScaledVector(dir, .5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+  return m;
+}
+function makeOscarStatue(title, sub){
   const g = new THREE.Group();
-  const gold   = new THREE.MeshStandardMaterial({color:0xe3b04a, roughness:.24, metalness:1.0, emissive:0x2a1e06, emissiveIntensity:.35});
-  const goldD  = new THREE.MeshStandardMaterial({color:0xd3a13f, roughness:.32, metalness:.95, emissive:0x241804, emissiveIntensity:.35});
-  const goldF  = new THREE.MeshStandardMaterial({color:0xd3a13f, roughness:.30, metalness:.95, side:THREE.DoubleSide, emissive:0x241804, emissiveIntensity:.35});
-  const V = (x,y,z) => new THREE.Vector3(x,y,z);
-  // petit membre : cylindre tendu entre deux points (a -> b), rayons r0 puis r1
-  const limb = (a,b,r0,r1,mat,seg=12) => {
-    const dir = new THREE.Vector3().subVectors(b,a), len = dir.length() || 1e-6;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,len,seg), mat);
-    m.position.copy(a).addScaledVector(dir,.5);
-    m.quaternion.setFromUnitVectors(V(0,1,0), dir.clone().normalize());
-    return m;
+  /* L'OSCAR REEL — specs officielles de l'Academie : 34,3 cm de haut, 3,9 kg,
+     socle noir de 13,3 cm de diametre. Chevalier Art Deco " streamline "
+     (Cedric Gibbons / George Stanley, 1927), SANS VISAGE, les DEUX BRAS RAMENES
+     DEVANT le corps serrant a deux mains une EPEE DE CROISE tenue VERTICALEMENT,
+     POINTE EN BAS, debout sur une BOBINE DE FILM A CINQ RAYONS (les cinq
+     branches de l'Academie) — bronze plaque or 24 carats.
+     Reperes verticaux (metres) : pieds .040 (dessus de la bobine) -> genou .128
+     -> bassin .190 -> taille .213 -> poitrine .252 -> epaules .275 -> menton
+     .303 -> couronne .343. La tete fait 4 cm : ~7,6 tetes, la proportion du
+     vrai trophée (un corps stylise, jamais un mannequin low-poly). */
+  const rough = awardRoughTex();
+  /* emissif tres faible : filet de securite si l'environnement PMREM n'a pas pu
+     etre cree (un metal pur sans envMap ne renvoie que des reflets speculaires
+     et paraitrait presque noir). L'or garde ainsi son " corps " dore. */
+  const gold  = new THREE.MeshPhysicalMaterial({color:0xf7d18a, metalness:1.0, roughness:.15, roughnessMap:rough, envMapIntensity:1.15, emissive:0x2a2008, emissiveIntensity:.18});
+  const goldD = new THREE.MeshPhysicalMaterial({color:0xe4bd6a, metalness:1.0, roughness:.26, roughnessMap:rough, envMapIntensity:1.0,  emissive:0x241a06, emissiveIntensity:.20});
+  const lacq  = new THREE.MeshPhysicalMaterial({color:0x09090b, metalness:.30, roughness:.24, clearcoat:1, clearcoatRoughness:.16, envMapIntensity:.85});
+  const V  = (x,y,z) => new THREE.Vector3(x,y,z);
+  const P2 = (x,y)   => new THREE.Vector2(x,y);
+  const ball = (x,y,z,r,mat,sx=1,sy=1,sz=1) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r,22,16), mat);
+    m.position.set(x,y,z); m.scale.set(sx,sy,sz); g.add(m); return m;
   };
 
-  // ---- bobine de film a cinq rayons (les cinq branches de l'Academie) ----
-  const R = .072;                                      // rayon de la bobine
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(R,R,.048,40,1,true), goldF);
-  rim.position.y = .024; g.add(rim);                   // bande exterieure (creuse)
-  const botF = new THREE.Mesh(new THREE.RingGeometry(.020,R,40), goldF);
-  botF.rotation.x = -Math.PI/2; botF.position.y = .0015; g.add(botF);
-  const topF = new THREE.Mesh(new THREE.RingGeometry(.020,R,40), goldF);
-  topF.rotation.x = -Math.PI/2; topF.position.y = .0465; g.add(topF);
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(.019,.019,.048,16), goldD);
-  hub.position.y = .024; g.add(hub);
+  /* ---- 1) SOCLE NOIR LAQUE : 13,3 cm de diametre, 2,8 cm de haut, chanfrein net ---- */
+  const BR = .0665, BH = .028;
+  g.add(new THREE.Mesh(new THREE.LatheGeometry([
+    P2(.000, .000),
+    P2(BR,   .000),
+    P2(BR,   .0042),                    // petit conge au sol
+    P2(BR,   .0245),
+    P2(BR-.0022, BH),                   // chanfrein : arete propre
+    P2(.000, BH)
+  ], 72), lacq));
+  // plaque gravee (nom + signature) : bandeau de laiton CINTRE sur la face avant du socle
+  const oPlate = awardPlateCurved(title, sub, BR + .0010);
+  oPlate.position.set(0, BH*.47, 0); g.add(oPlate);
+
+  /* ---- 2) BOBINE DE FILM A CINQ RAYONS : or poli, un TROU pile face au client ---- */
+  const RH = .012, R = .034, hubR = .0125, rimIn = .0275, ry = BH;
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(R,R,RH,64,1,true), gold);
+  rim.position.y = ry+RH/2; g.add(rim);                    // jante
+  const ring = (ri,ro,y) => {                              // couronnes haute et basse
+    const m = new THREE.Mesh(new THREE.RingGeometry(ri,ro,64), gold);
+    m.rotation.x = -Math.PI/2; m.position.y = y; g.add(m); return m;
+  };
+  ring(rimIn, R, ry+.0008); ring(rimIn, R, ry+RH-.0008);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubR,hubR,RH,32), goldD);
+  hub.position.y = ry+RH/2; g.add(hub);                    // moyeu central
+  const SEG = Math.PI*2/5, SPOKE = .52, Rmid = (hubR+rimIn)/2;
   for(let i=0;i<5;i++){
-    const h = new THREE.Group(); h.rotation.y = i*Math.PI*2/5;
-    const sp = new THREE.Mesh(new THREE.BoxGeometry(R-.019,.013,.014), goldD);
-    sp.position.set((R+.019)/2, .024, 0); h.add(sp);
-    g.add(h);
+    const phi = Math.PI/2 + SEG/2 + i*SEG;                 // un TROU au centre de la face avant
+    // (RingGeometry tournee de -PI/2 : son angle theta vaut -azimut)
+    [ry+.0008, ry+RH-.0008].forEach(y => {
+      const arc = new THREE.Mesh(new THREE.RingGeometry(hubR, rimIn, 16, 1, -phi - SPOKE/2, SPOKE), gold);
+      arc.rotation.x = -Math.PI/2; arc.position.y = y; g.add(arc);
+    });
+    [phi - SPOKE/2, phi + SPOKE/2].forEach(pe => {         // parois radiales : elles closent les trous
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(rimIn-hubR, RH-.0016), gold);
+      w.position.set(Rmid*Math.cos(pe), ry+RH/2, Rmid*Math.sin(pe));
+      w.rotation.y = -pe; g.add(w);
+    });
   }
+  const innerWall = new THREE.Mesh(new THREE.CylinderGeometry(rimIn,rimIn,RH-.0016,48,1,true), gold);
+  innerWall.position.y = ry+RH/2; g.add(innerWall);        // paroi interne : scelle le bord des trous
+  ball(0, ry+RH+.0012, 0, .0042, goldD, 1, .55, 1);        // cabochon de l'axe
 
-  // ---- chevalier Art Deco : debout, pieds joints sur la bobine ----
-  const y0 = .048;                                     // dessus de la bobine (les pieds y reposent)
-  const footL = V(-.015, y0+.004, .004), hipL = V(-.014, y0+.096, 0);
-  g.add(limb(footL, hipL, .0135, .025, gold));         // jambe gauche (cuisse epaisse en haut)
-  const legR = limb(footL.clone().setX(.015), hipL.clone().setX(.014), .0135, .025, gold);
-  g.add(legR);
-  const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(.030,.026,.028,16), gold);
-  pelvis.position.y = y0+.106; pelvis.scale.z = .80; g.add(pelvis);
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(.031,.021,.070,16), gold);
-  torso.position.y = y0+.155; torso.scale.set(1.08,1,.78); g.add(torso);     // buste plus sculpté (Art Deco)
-  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(.086,.024,.030), gold);
-  shoulder.position.y = y0+.196; shoulder.scale.z = .85; g.add(shoulder);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.011,.012,.020,12), gold);
-  neck.position.y = y0+.212; g.add(neck);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.022,18,14), gold);
-  head.position.y = y0+.236; head.scale.set(1,1.16,1.04); head.rotation.x = -.14; g.add(head);   // tete lisse, legerement inclinee
+  /* ---- 3) LE CHEVALIER ---- */
+  const f0 = ry + RH;                                      // .040 : dessus de la bobine
+  [-1,1].forEach(s => {                                    // pieds : volumes aplatis, pointes vers l'avant
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(.0088,20,14), gold);
+    foot.position.set(s*.0096, f0+.0042, .0062);
+    foot.scale.set(.95,.60,1.95); g.add(foot);
+  });
+  [-1,1].forEach(s => {                                    // jambes : capsules, raccords fondus
+    const hip   = V(s*.0128, f0+.1500, .0005),
+          knee  = V(s*.0110, f0+.0880, .0025),
+          ankle = V(s*.0097, f0+.0155, .0015);
+    g.add(awardLimb(hip,  knee,  .0125, gold));            // cuisse
+    g.add(awardLimb(knee, ankle, .0092, gold));            // jambe
+    ball(s*.0110, f0+.0885, .0025, .0094, gold);           // rotule du genou
+  });
+  // bassin + fessiers (le nu Art Deco du vrai Oscar)
+  ball(0, f0+.1500, -.0012, .0222, gold, 1.30, .82, .78);   // bassin (un peu aplati : la lame passe devant)
+  [-1,1].forEach(s => ball(s*.0088, f0+.1285, -.0122, .0132, gold, 1.00, 1.02, .66));
+  /* buste : volume de revolution ENTIEREMENT LISSE (le vrai Oscar est un nu
+     " streamline " : aucun pectoral, aucun abdo saillant, aucun detail
+     anatomique — le torse est un panneau doux qui fond dans des epaules nettes) */
+  const torso = new THREE.Mesh(new THREE.LatheGeometry([
+    P2(.000, f0+.1385),
+    P2(.0190,f0+.1385),
+    P2(.0262,f0+.1470),   // hanches
+    P2(.0254,f0+.1570),
+    P2(.0230,f0+.1680),
+    P2(.0216,f0+.1760),   // taille
+    P2(.0222,f0+.1860),
+    P2(.0238,f0+.1970),
+    P2(.0252,f0+.2080),   // poitrine
+    P2(.0258,f0+.2180),
+    P2(.0254,f0+.2260),
+    P2(.0246,f0+.2340),   // ligne des epaules
+    P2(.0205,f0+.2420),   // pentes des trapezes
+    P2(.0126,f0+.2490),   // base du cou
+    P2(.000, f0+.2530)
+  ], 64), gold);
+  torso.scale.z = .62; torso.position.z = .0008; g.add(torso);
+  [-1,1].forEach(s => {                                    // trapezes : le cou se pose dans les epaules
+    ball(s*.0132, f0+.2445, -.0012, .0086, gold, 1.15, .70, 1.0);
+    ball(s*.0242, f0+.2345, .0015, .0102, gold, 1.05, .95, 1.0);   // deltoides
+  });
+  g.add(awardLimb(V(0, f0+.2395, .0005), V(0, f0+.2595, .0018), .0098, gold));  // cou
+  // tete : ovale Art Deco, SANS VISAGE (un simple nez a peine suggere)
+  const head = new THREE.Mesh(new THREE.LatheGeometry([
+    P2(.0000,.0000),
+    P2(.0072,.0010),
+    P2(.0098,.0034),
+    P2(.0116,.0074),
+    P2(.0124,.0120),
+    P2(.0126,.0168),
+    P2(.0124,.0214),
+    P2(.0116,.0264),
+    P2(.0102,.0312),
+    P2(.0076,.0358),
+    P2(.0000,.0400)
+  ], 48), gold);
+  head.position.set(0, f0+.2635, .0012); head.rotation.x = -.03; head.scale.set(1, 1, 1.10);
+  g.add(head);
+  ball(0, f0+.2830, -.0060, .0106, gold, 1.0, .96, .80);   // masse occipitale
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(.0058,16,12), gold);
+  nose.position.set(0, f0+.2790, .0150); nose.scale.set(.36,.86,.60); g.add(nose);
 
-  // ---- bras replies vers l'avant, mains jointes sur la garde ----
+  /* ---- 4) BRAS : ramenes devant le corps, mains jointes sur la poignee de
+     l'epee (le geste exact du trophée) ---- */
   [-1,1].forEach(s => {
-    const sh = V(s*.042, y0+.192, .002), el = V(s*.050, y0+.162, .012), hd = V(s*.013, y0+.155, .024);
-    g.add(limb(sh, el, .0135, .0115, gold));           // bras
-    g.add(limb(el, hd, .0115, .0095, gold));           // avant-bras
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(.0105,12,10), gold);
-    hand.position.copy(hd); hand.scale.z = .8; g.add(hand);
+    const sh = V(s*.0242, f0+.2350, .0015),
+          el = V(s*.0234, f0+.1880, -.0018),
+          wr = V(s*.0088, f0+.1610, .0160);
+    g.add(awardLimb(sh, el, .0086, gold));                 // bras
+    g.add(awardLimb(el, wr, .0060, gold));                 // avant-bras, ramene vers le milieu
+    ball(s*.0234, f0+.1880, -.0018, .0076, gold);          // coude
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(.0092,18,14), gold);
+    hand.position.set(s*.0042, s < 0 ? f0+.1555 : f0+.1645, .0180);
+    hand.scale.set(.60,1.02,.64); g.add(hand);             // mains enroulees sur la poignee
   });
 
-  // ---- l'epee, tenue verticalement, POINTE EN BAS ----
-  const SZ = .030;                                     // plan de l'epee (devant le corps)
-  const blade = limb(V(0, y0+.038, SZ), V(0, y0+.118, SZ), .0028, .0072, gold, 10);
-  blade.scale.set(1.25,1,.38); g.add(blade);                   // lame plus fine et verticale, pointe bien en bas
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(.052,.008,.010), gold);
-  guard.position.set(0, y0+.129, SZ); g.add(guard);
-  const grip = new THREE.Mesh(new THREE.CylinderGeometry(.0075,.0075,.028,12), gold);
-  grip.position.set(0, y0+.147, SZ); g.add(grip);
-  const pommel = new THREE.Mesh(new THREE.SphereGeometry(.010,12,10), gold);
-  pommel.position.set(0, y0+.163, SZ); g.add(pommel);
+  /* ---- 5) L'EPEE DE CROISE : tenue VERTICALEMENT contre le torse, POINTE EN
+     BAS ; la lame descend devant les jambes et vient finir sur la bobine,
+     entre les pieds ---- */
+  const sword = new THREE.Group();
+  sword.position.set(0, f0+.1540, .0185);                  // origine = centre de la garde (lame CONTRE les jambes)
+  sword.rotation.x = .085;
+  g.add(sword);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(.040,.0050,.0088), gold);
+  sword.add(guard);                                        // garde en croix
+  [-1,1].forEach(s => {
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(.0034,14,10), goldD);
+    knob.position.set(s*.020, 0, 0); sword.add(knob);
+  });
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(.0040,.0044,.0240,20), goldD);
+  grip.position.y = .0120; sword.add(grip);                // poignee a deux mains
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(.0048,18,14), gold);
+  pommel.position.y = .0262; sword.add(pommel);            // pommeau
+  const blade = new THREE.Mesh(new THREE.CylinderGeometry(.0046,.0016,.128,4,1), gold);
+  blade.position.y = -.0660; blade.scale.z = .42; sword.add(blade);   // lame a section losange
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.0016,.010,4), gold);
+  tip.rotation.x = Math.PI; tip.scale.z = .42;
+  tip.position.y = -.1340; sword.add(tip);                 // pointe en bas, au-dessus de la bobine
+  return g;
+}
+function makeCesarStatue(title, sub){
+  const g = new THREE.Group();
+  /* LE CESAR REEL — 29 cm de haut, base 8 x 8 cm, 3,6 kg, bronze dore (fonderie
+     Bocquel). Ce n'est NI un bloc lisse NI une statuette figurative : c'est une
+     COMPRESSION d'ornementations de mobilier (pieds, rosaces, moulures ecrases
+     par la presse), une piece CREUSE dont le dessus est irregulier. On modele :
+       - un socle noir a angles francs qui porte la plaque gravee ;
+       - la compression : section en carre arrondi qui SE TORD et se courbe en
+         montant, plis serres du metal froisse, facettes (pans de bronze),
+         bosses d'ornements en saillie, sommet creux et dechiquete ;
+       - des fragments d'ornements restes accroches (rosace, moulure, eclat) ;
+       - une patine par couleur de sommet (or clair sur les aretes, brun au fond
+         des plis) + rugosite variable. */
+  const rough = awardRoughTex();
+  const bronze = new THREE.MeshPhysicalMaterial({
+    color:0xebb96d, metalness:.98, roughness:.24, roughnessMap:rough,
+    vertexColors:true, envMapIntensity:1.0, emissive:0x180f04, emissiveIntensity:.20
+  });
+  // meme laiton, SANS couleurs de sommet : pour les ornements rapportes
+  const bronzeSolid = new THREE.MeshPhysicalMaterial({
+    color:0xd8ac63, metalness:.98, roughness:.27, roughnessMap:rough, envMapIntensity:1.0,
+    emissive:0x1b1206, emissiveIntensity:.20
+  });
+  const noir = new THREE.MeshPhysicalMaterial({
+    color:0x0a0a0c, metalness:.32, roughness:.27, clearcoat:1, clearcoatRoughness:.18, envMapIntensity:.85
+  });
+  const P2 = (x,y) => new THREE.Vector2(x,y);
+
+  /* --- socle noir : 8,8 cm (8 x 8 cm reels), angles francs, platine en retrait + plaque gravee --- */
+  const BS = .088, BH = .020;
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(BS, BH, BS), noir);
+  plinth.position.y = BH/2; g.add(plinth);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(BS-.007, .0032, BS-.007), noir);
+  cap.position.y = BH + .0006; g.add(cap);
+  const plate = awardPlateMesh(title, sub);
+  plate.position.set(0, BH*.48, BS/2 + .0006); g.add(plate);
+
+  /* --- LA COMPRESSION : 26 cm au-dessus du socle (29,2 cm au total, crete du
+     sommet comprise) ; section etroite — le vrai Cesar est un fuseau de ~5 cm
+     de large, pas un bloc large : c'est ce qui fait sa silhouette. --- */
+  const H = .260, HW = .0215;
+  /* bosses d'ornements ecrasees : [azimut, hauteur 0..1, amplitude, largeur ang., hauteur rel.] */
+  const BOSSES = [
+    [ .30,.20,.0092,.36,.13], [1.25,.52,.0080,.28,.10], [2.10,.30,.0098,.32,.12],
+    [2.95,.70,.0076,.28,.09], [-0.55,.62,.0086,.31,.11], [-1.60,.36,.0082,.34,.12],
+    [-2.35,.80,.0070,.25,.08], [ 3.05,.12,.0074,.29,.08]
+  ];
+  /* CENTRAL : la forme du bloc, en fonction de l'azimut LOCAL (a0) et de la hauteur
+     normalisee (t). Le maillage ET les ornements passent par ICI : une piece posee
+     sur la surface ne peut donc pas flotter ni s'enterrer. */
+  const shapeAt = (a0, t) => {
+    const tw = .55*Math.sin(t*2.2 + .4) + .28*t;        // torsion en montant : asymetrie
+    const a  = a0 + tw;
+    let d = 0;
+    d += .0090*Math.sin(a*2.3 + t*4.6 + .7)*Math.sin(Math.PI*Math.min(1, t*1.15));  // grandes ondes
+    d += .0062*Math.sin(a*3.7 - t*3.2 + 1.9);           // masse qui se tord
+    d += .0052*Math.sin(a*7.6 + t*1.4 + Math.sin(t*5.0)*.9);   // plis verticaux serres
+    d += .0036*(Math.pow(Math.abs(Math.sin(a*4.1 - .6 + t*2.1)), .6) - .5);  // cretes du metal froisse
+    d -= .0044*Math.pow(Math.abs(Math.sin(a*5.6 + .9)), 6)*(1 - .5*t);       // crevasses nettes
+    d += .0018*Math.sin(a*15.5 + t*7.5);                // froissage fin
+    for(const b of BOSSES){
+      let da = a - b[0]; while(da > Math.PI) da -= 2*Math.PI; while(da < -Math.PI) da += 2*Math.PI;
+      d += b[2]*Math.exp(-Math.pow(da/b[3],2) - Math.pow((t-b[1])/b[4],2));
+    }
+    const q = .0026;                                    // facettes : pans de bronze comprime
+    d = d*.30 + Math.round(d/q)*q*.70;
+    const pied = Math.max(0, Math.min(1, t/.10));       // le pied reste franc et carre
+    d = Math.max(-.0085, Math.min(.0118, d)) * (.32 + .68*pied);
+    // section : carre arrondi (n = 3.9) + flexion de l'axe
+    const c0 = Math.cos(a0), s0 = Math.sin(a0);
+    const sq = 1/Math.pow(Math.pow(Math.abs(c0),3.9) + Math.pow(Math.abs(s0),3.9), 1/3.9);
+    const prof = HW*(1 + .13*Math.sin(Math.PI*Math.min(1, t*1.05)) - .07*t*t);
+    const rr = prof*sq + d;
+    let vy = t*H - H/2;
+    if(t > .84){                                        // sommet dechiquete : les ornements debordent
+      const u = (t-.84)/.16, sm = u*u*(3-2*u);
+      vy += sm*(.0110*Math.sin(a*3.7 + 1.2) + .0056*Math.sin(a*7.3 - .5) - .0042);
+    }
+    return { x:c0*rr + .0068*Math.sin(t*2.5 + .3),      // la colonne se courbe en montant
+             y:vy,
+             z:s0*rr + .0038*Math.sin(t*1.9 - 1.1), d };
+  };
+  const geo = new THREE.CylinderGeometry(1, 1, H, 84, 56, false);
+  const p = geo.attributes.position;
+  const disp = new Float32Array(p.count), topHollow = new Uint8Array(p.count);
+  let dMin = 1e9, dMax = -1e9;
+  for(let i=0;i<p.count;i++){
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const t = (y + H/2)/H;
+    if(Math.hypot(x, z) < 1e-6){                        // centres des capitons
+      disp[i] = 0;
+      if(y > 0){ p.setY(i, y - .020); topHollow[i] = 1; }   // dessus CREUX (piece coulee creuse)
+      continue;
+    }
+    const s = shapeAt(Math.atan2(z, x), t);
+    disp[i] = s.d; if(s.d < dMin) dMin = s.d; if(s.d > dMax) dMax = s.d;
+    p.setXYZ(i, s.x, s.y, s.z);
+  }
+  // patine : or clair sur les aretes, brun chaud au fond des plis
+  const col = new Float32Array(p.count*3), range = (dMax - dMin) || 1;
+  for(let i=0;i<p.count;i++){
+    let cr, cg, cb;
+    if(topHollow[i]){ cr = .30; cg = .235; cb = .155; }
+    else{
+      const n = Math.max(0, Math.min(1, (disp[i] - dMin)/range));
+      const s = .40 + .60*Math.pow(n, .9);
+      cr = s; cg = s*(1 - .17*(1-n)); cb = s*(1 - .36*(1-n));
+    }
+    col[i*3] = cr; col[i*3+1] = cg; col[i*3+2] = cb;
+  }
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, bronze);
+  body.position.y = BH + H/2;
+  body.rotation.y = .55;                                // un pli saillant face au client (voir BODY_RY plus bas)
+  g.add(body);
+
+  /* --- fragments d'ornements restes en saillie : c'est CE detail qui identifie
+     le Cesar (une compression de moulures, pas un bloc abstrait).
+     On pose chaque piece SUR LA SURFACE REELLE : le rayon est recalcule a partir
+     de la meme section (carre arrondi) que celle du bloc, sinon une piece posee
+     a rayon constant " flotterait " devant les faces plates. --- */
+  const BODY_RY = .55;                                  // rotation du corps : les ornements suivent son azimut
+  const bodyC = BH + H/2;                               // centre vertical du bloc
+  /* Pose une piece EXACTEMENT sur la surface : on demande le point a shapeAt
+     (la meme fonction que celle qui deforme le maillage), puis on l'ecarte
+     legerement vers l'exterieur pour que l'ornement depasse du bronze. */
+  const place = (mesh, ang, yW, proud, rx, ry, rz, s) => {
+    const t  = Math.max(0, Math.min(1, (yW - bodyC)/H + .5));
+    const sp = shapeAt(ang, t);
+    const cB = Math.cos(BODY_RY), sB = Math.sin(BODY_RY);
+    const wx = sp.x*cB + sp.z*sB, wz = -sp.x*sB + sp.z*cB;   // point de surface, corps tourne
+    const rw = Math.hypot(wx, wz) || 1e-6;
+    const ux = wx/rw, uz = wz/rw;                            // normale sortante (radiale)
+    const r = rw + (proud || 0);
+    mesh.position.set(ux*r, bodyC + sp.y, uz*r);
+    mesh.rotation.set(rx || 0, Math.atan2(ux, uz) + (ry || 0), rz || 0);   // +Z de la piece = normale sortante
+    if(s) mesh.scale.setScalar(s);
+    g.add(mesh); return mesh;
+  };
+  // 1) rosace ecrasee (extrusion d'une fleur a 8 lobes, biseautee) : vrai ExtrudeGeometry
+  const floret = new THREE.Shape();
+  for(let i=0;i<=16;i++){
+    const ang = i/16*Math.PI*2, rr = (i % 2) ? .0030 : .0072;
+    const px = Math.cos(ang)*rr, py = Math.sin(ang)*rr;
+    if(i === 0) floret.moveTo(px, py); else floret.lineTo(px, py);
+  }
+  const floretGeo = new THREE.ExtrudeGeometry(floret, {depth:.0038, bevelEnabled:true, bevelSize:.0011, bevelThickness:.0011, bevelSegments:2, curveSegments:2});
+  floretGeo.center();
+  place(new THREE.Mesh(floretGeo, bronzeSolid), 1.75, BH+.148, .0016, .22, 0, .30);
+  // 2) moulure tordue (anneau) encastree en haut du bloc
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(.0094,.0034,10,22,Math.PI*1.30), bronzeSolid);
+  place(torus, .80, BH+.212, .0012, 0, 0, .30);
+  // 3) eclat de cadre (petit bloc biseaute couche sur le flanc)
+  const chip = new THREE.Mesh(new THREE.BoxGeometry(.018,.0066,.0054), bronzeSolid);
+  place(chip, -1.90, BH+.070, .0018, 0, 0, .42);
+  // 4) cabochon d'ornement (bosse ronde) et 5) petit lobe bas
+  place(new THREE.Mesh(new THREE.SphereGeometry(.0082,20,14), bronzeSolid), 2.95, BH+.170, .0010, 0, 0, 0);
+  place(new THREE.Mesh(new THREE.SphereGeometry(.0062,18,12), bronzeSolid), -2.55, BH+.044, .0018, 0, 0, 0);
   return g;
 }
 function makeVintageBooth(){
@@ -1369,9 +1745,9 @@ function makeVintageBooth(){
     const m = new THREE.Mesh(geo, mat); m.position.set(x,y,z); m.rotation.set(rx,ry,rz); g.add(m); return m;
   };
   // --- materiaux vintage (bois fonces cires) ---
-  const woodF = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#452d1b","#5a3c26","#241708")), roughness:.82, metalness:.08});
+  const woodF = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#452d1b","#241708")), roughness:.82, metalness:.08});
   woodF.map.repeat.set(3,1);
-  const woodD = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#33200f","#412a18","#1a0f08")), roughness:.9, metalness:.05});
+  const woodD = new THREE.MeshStandardMaterial({map:canvasTex(texWood("#33200f","#1a0f08")), roughness:.9, metalness:.05});
   const topM = new THREE.MeshStandardMaterial({map:canvasTex(texCounterTop()), roughness:.68, metalness:.12});
   topM.map.repeat.set(2,1);
   const brass = new THREE.MeshStandardMaterial({map:canvasTex(texBrass()), roughness:.32, metalness:.9});
@@ -1396,9 +1772,10 @@ function makeVintageBooth(){
 
   // --- mur du fond perce d'une TRES grande fenetre de caisse (elle remplit l'ecran) ---
   const WZ = -2.98;                              // z local du mur (-> z monde 0)
-  const opW = 2.90, opB = -.60, opT = 2.90;      // ouverture : demi-largeur, bas, haut -> remplit TOUT l'ecran
-  const winW = opW*2, winH = opT-opB, winY = (opB+opT)/2;
-  boothWinOuter = winW/2 + .14;                  // bord exterieur du cadre (repere) - hors ecran ici
+  // Ouverture volontairement plus large que l'ecran sur TOUS les formats (y compris 21:9) :
+  // sinon un bandeau de mur nu apparaitrait sur les cotes des ecrans tres larges.
+  const opW = 4.30, opB = -.60, opT = 2.90;      // demi-largeur, bas, haut
+  const winW = 5.8, winH = opT-opB, winY = (opB+opT)/2;   // cadre bois + vitre : toujours hors champ
   mkb(new THREE.PlaneGeometry(20-opW, 10.5), wallPlainM, -(opW+20)/2, 3.0, WZ);
   mkb(new THREE.PlaneGeometry(20-opW, 10.5), wallPlainM,  (opW+20)/2, 3.0, WZ);
   mkb(new THREE.PlaneGeometry(opW*2, 8.45-opT), wallPlainM, 0, (opT+8.45)/2, WZ);
@@ -1469,21 +1846,37 @@ function makeVintageBooth(){
     new THREE.MeshBasicMaterial({map:canvasTex(texTarifs()), transparent:true}));
   tbFace.position.z = .015; tb.add(tbFace);
   tb.position.set(1.00, .14, .90); tb.rotation.x = -.20; g.add(tb);   // posee sur le comptoir (surface y = 0)
+  boothTarifs = tb;                                                   // x affine par placeTarifs() selon la largeur d'ecran
 
   // --- statuettes de recompense posees SUR le comptoir, a DROITE de l'affiche rouge :
-  //     le CESAR (bronze comprime) et, juste a cote, l'OSCAR (chevalier dore) ---
-  boothCesar = makeCesarStatue();
-  boothCesar.scale.setScalar(.94);                    // ~ 30 cm
+  //     le CESAR (29,2 cm : socle 2 cm + compression 27,2 cm, base 8 x 8 cm) et,
+  //     juste a cote, l'OSCAR (34,3 cm, socle noir de 13,3 cm) : proportions reelles
+  //     des deux trophees, aucun facteur d'echelle. Les deux sont contemplatives :
+  //     un clic les prend " comme un billet " pour lire la PLAQUE DE LAITON GRAVEE
+  //     de leur socle (leur devise, aucun nom personnel), aucun lien sortant. ---
+  boothCesar = makeCesarStatue("FROM CODE TO REALITY");
   boothCesar.position.set(CESAR_X0, 0, .45);          // x affine par placeCesar() selon la largeur d'ecran
+  boothCesar.userData = { home:{x:CESAR_X0, y:0, z:.45, ry:0, scale:1}, at:0,
+    hLocal:.292, wLocal:.100, dy:0, dx:0, dyc:0, dxc:0, label:"CESAR" };
   g.add(boothCesar);
-  boothOscar = makeOscarStatue();
-  boothOscar.scale.setScalar(1.45);                   // ~ 34 cm (real Oscar)
+  boothOscar = makeOscarStatue("CREATIVE TECHNOLOGIST");
   boothOscar.position.set(CESAR_X0 - AWARD_GAP, 0, .45);
+  boothOscar.userData = { home:{x:CESAR_X0 - AWARD_GAP, y:0, z:.45, ry:0, scale:1}, at:0,
+    hLocal:.343, wLocal:.136, dy:0, dx:0, dyc:0, dxc:0, label:"OSCAR" };
   g.add(boothOscar);
-  // reflets reels sur l'or et le bronze des deux trophees (repli : emissif de secours)
+  // reflets reels sur l'or et le bronze des deux trophees (repli : emissif de secours).
+  // Attention : les plaques de laiton sont des boites a 6 materiaux -> on parcourt les tableaux.
   const awardRefl = getAwardEnv();
   if(awardRefl) [boothCesar, boothOscar].forEach(o => o.traverse(n => {
-    if(n.isMesh){ n.material.envMap = awardRefl; n.material.envMapIntensity = .95; n.material.needsUpdate = true; awardEnvMats.push(n.material); }
+    if(!n.isMesh) return;
+    const list = Array.isArray(n.material) ? n.material : [n.material];
+    for(const m of list){
+      if(!m || awardEnvMats.includes(m)) continue;
+      // on MEMORISE l'intensite propre du materiau (l'or reflechit plus que le laque noir)
+      m.userData.envI = (typeof m.envMapIntensity === "number") ? m.envMapIntensity : .95;
+      m.envMap = awardRefl; m.needsUpdate = true;
+      awardEnvMats.push(m);
+    }
   }));
 
   // (les affiches anglaises ont rejoint le MUR DU FOND, sur le meme plan que le panneau
@@ -1550,7 +1943,8 @@ function buildScene(){
   catch(e){ ok = false; console.warn("WebGL indisponible :", e); }
   if(!ok || !renderer.getContext()){ noWebgl.hidden = false; return; }
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.setSize(innerWidth, innerHeight, false);
+  const v0 = viewSize();
+  renderer.setSize(v0.w, v0.h, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
 
@@ -1558,13 +1952,21 @@ function buildScene(){
   scene.background = new THREE.Color(0x140f0c);      // brun chaud " billetterie "
   scene.fog = new THREE.FogExp2(0x140f0c, 0.045);
 
-  camera = new THREE.PerspectiveCamera(46, innerWidth/innerHeight, .1, 80);
+  camera = new THREE.PerspectiveCamera(46, viewAspect(), .1, 80);
   camera.position.set(0,.72,3.6);
   camera.lookAt(0,camLookY,0);
 
   sceneAmbient = new THREE.AmbientLight(0xfff3e2, .88); scene.add(sceneAmbient);
   sceneDir = new THREE.DirectionalLight(0xffe8d0, .9); sceneDir.position.set(-4,6,5); scene.add(sceneDir);
   sceneRim = new THREE.DirectionalLight(0x7799ff, .3); sceneRim.position.set(4,2,-6); scene.add(sceneRim);
+
+  // --- petite source " studio " dediee aux statuettes : quand on prend un trophee, elle
+  //     s'allume en douceur devant lui pour reveler les volumes d'or (aucune ombre portee,
+  //     aucun halo : juste de quoi lire les plis du bronze et le poli du chevalier). ---
+  awardSpot = new THREE.SpotLight(0xfff2d8, 0, 3.2, .52, .85, 2);
+  awardSpot.position.set(0, 1.4, 2.2);
+  awardSpot.visible = false;
+  scene.add(awardSpot); scene.add(awardSpot.target);
 
   // guichet vintage (fenetre de caisse, auvent, lambris, comptoir)
   scene.add(makeVintageBooth());
@@ -1614,7 +2016,7 @@ function buildScene(){
   cursorGlow.visible = false; scene.add(cursorGlow);
 
   // poussieres
-  const dustN = innerWidth < 700 ? 140 : 340;
+  const dustN = viewSize().w < 700 ? 140 : 340;
   const dp = new Float32Array(dustN*3);
   for(let i=0;i<dustN;i++){
     dp[i*3]   = (Math.random()-0.5)*14;
@@ -1673,7 +2075,7 @@ function buildScene(){
       home: null, phase: i*1.9 + 1,
       cx:0,cy:0,cz:0, crx:0,cry:0, cs:1, cop:1, sway:1,
       dragY:0,dragX:0, dragYc:0,dragXc:0,
-      activPrev:false, stampAnim:0, stampDone:false, stamping:false,
+      stampAnim:0, stampDone:false, stamping:false,
       hasVideo: isVideo(p.front.src) || isVideo(p.back.src),
       litMats:[frontMat, backMat, edgeMat], lit:0,     // allumage par le projecteur du curseur
     };
@@ -1698,14 +2100,12 @@ function buildScene(){
     t.frontMat.opacity = t.backMat.opacity = t.edgeMat.opacity = 0;
   });
   toPile(true);                                 // au depart : pas de billet en main, la pile au comptoir
-  if(boothsClosed){                             // rideau ferme au demarrage : la barre d'invitation reste cachee,
-    ticketBar.classList.remove("show");         // c'est la cloche (seul point eclaire) qui ouvre le guichet
-    ticketBar.setAttribute("aria-hidden","true");
-    document.body.classList.remove("hand");
-    if(hint) hint.classList.add("hide");
-  } else {
-    ticketBar.classList.add("show"); ticketBar.setAttribute("aria-hidden","false");
-  }
+  /* La barre inferieure reste visible des le depart : c'est elle qui porte la LISTE
+     des projets. Avec le rideau ferme, aucun billet n'est en main, donc le bouton
+     STAMP reste masque (body:not(.hand)) et c'est la cloche qui ouvre le guichet. */
+  ticketBar.classList.add("show");
+  ticketBar.setAttribute("aria-hidden","false");
+  document.body.classList.remove("hand");
   bindWorld();
   startLoop();
 }
@@ -1723,7 +2123,7 @@ function showHero(i, instant, dir){
   heroIdx = j;
   pileHover = null;
   stackLayout();                                 // la pile des billets encore a tamponner suit le billet en main
-  if(hovered){ setActive(hovered, false); hovered = null; }
+  if(hovered){ hovered = null; }
   tickets.forEach(t => { t.dragY = 0; t.dragX = 0; });
   if(instant){
     const t = tickets[heroIdx];
@@ -1733,10 +2133,23 @@ function showHero(i, instant, dir){
     t.group.rotation.set(t.crx,t.cry,0);
     t.group.scale.setScalar(t.cs);
     t.frontMat.opacity = t.backMat.opacity = t.edgeMat.opacity = t.cop;
+  } else {
+    /* Entree du billet, DANS LE SENS DU GESTE : on decale legerement sa position de depart,
+       le lissage habituel (updateTickets, 16 % par image) fait le reste — environ 250 ms.
+       Vers le suivant (doigt vers le haut), il sort de la pile : il part donc d'un peu plus
+       loin dans le comptoir (le fond), et remonte vers vous en grandissant. Vers le precedent
+       (doigt vers le bas), il tombe d'au-dessus de sa place. Les deux trajets restent DEVANT
+       le comptoir (jamais dedans : le comptoir est plein sous y = 0). */
+    const t = tickets[heroIdx];
+    if(t){
+      t.cz -= .30;
+      if(step < 0) t.cy += .28;
+    }
   }
   document.body.classList.add("ticket-open");
   syncHandUI();
-  if(!instant) snd.paper();
+  updateProjectListActive();
+  if(!instant) { /* sound removed */ }
 }
 
 /* Repos : aucun billet en main, la pile reste posee sur le comptoir. */
@@ -1744,19 +2157,34 @@ function toPile(instant){
   if(!tickets.length) return;
   heroIdx = -1;
   pileHover = null;
-  if(hovered){ setActive(hovered, false); hovered = null; }
+  if(hovered){ hovered = null; }
   tickets.forEach(t => { t.dragY = 0; t.dragX = 0; });
   stackLayout();
   document.body.classList.remove("ticket-open");
   syncHandUI();
-  if(!instant) snd.put();
+  updateProjectListActive();
+  if(!instant) { /* sound removed */ }
 }
 
-/* HUD : en main -> " STAMP " ; au repos -> invitation a cliquer la pile. */
+/* ================== Etat du guichet : rideau ouvert / ferme ==================
+   L'invite au-dessus de la barre (" SCROLL TO CHOOSE A TICKET ") n'existe que
+   guichet OUVERT : rideau ferme, il n'y a rien a choisir (tout est dans le noir)
+   et la cloche est le seul repere. UN SEUL point de bascule : la classe
+   `body.booth-closed`, lisible en CSS (et le aria-hidden qui suit). */
+function syncBoothState(){
+  const closed = !!boothsClosed;
+  document.body.classList.toggle("booth-closed", closed);
+  if(stampMeta) stampMeta.setAttribute("aria-hidden", closed ? "true" : "false");
+}
+
+/* HUD : la barre inferieure est TOUJOURS visible (elle porte la liste des projets,
+   qui doit rester accessible). Le bouton STAMP n'apparait qu'avec un billet en main
+   (body.hand) ; l'etat a droite indique ce qu'il y a a faire. */
 function syncHandUI(){
   if(!ticketBar) return;
   ticketBar.classList.add("show");
   ticketBar.setAttribute("aria-hidden","false");
+  syncBoothState();
   const inHand = heroIdx >= 0 && !!tickets[heroIdx];
   if(inHand){
     document.body.classList.add("hand");
@@ -1764,20 +2192,45 @@ function syncHandUI(){
     if(stampBtn) stampBtn.disabled = false;
   } else {
     document.body.classList.remove("hand");
-    const left = tickets.filter(t => !t.stamped).length;
-    if(stampTitle) stampTitle.textContent = left ? "PICK A TICKET" : "ALL STAMPED";
+    /* Restants : on part des PROJETS, pas de `tickets` : la liste des projets (et son
+       invite) doit etre juste meme si la scene 3D n'a pas pu se construire (repli
+       sans WebGL), donc meme quand `tickets` n'existe pas encore. `stampedOrder`
+       reste la source de verite du nombre de billets deja tamponnes. */
+    const left = Math.max(0, PROJECTS.length - stampedOrder.length);
+    if(stampTitle) stampTitle.textContent = left ? "SCROLL TO CHOOSE A TICKET" : "ALL STAMPED";
     if(stampBtn) stampBtn.disabled = true;
   }
-  if(hint) hint.classList.toggle("hide", inHand);
 }
 let lastCycle = 0;
-function cycleHero(dir){
+/* Un cran de feuilletage : billet suivant / precedent. Toute la navigation vit ICI.
+   force = true ignore l'anti-repetition : le swipe est UN geste volontaire (et deja limite a
+   un seul changement par geste par le suivi du doigt), il ne doit pas etre avale. */
+function cycleHero(dir, force){
   const now = performance.now();
-  if(heroIdx < 0 || openPanel || detailOpen || stampingLock || !tickets.length) return;
-  if(tickets[heroIdx] && tickets[heroIdx].stamped) return;
-  if(now - lastCycle < 380) return;              // anti-repetition (molette moins sensible)
+  if(heroIdx < 0 || openPanel || detailOpen || stampingLock || !tickets.length) return false;
+  if(tickets[heroIdx] && tickets[heroIdx].stamped) return false;
+  if(!force && now - lastCycle < 380) return false;   // anti-repetition (molette et fleches)
   lastCycle = now;
   showHero(heroIdx + (dir > 0 ? 1 : -1), false, dir);
+  return true;
+}
+/* UN SEUL point d'entree pour " passer d'un billet a l'autre " : la molette / le pave tactile,
+   le swipe vertical et les fleches passent par ici — aucune logique de navigation dupliquee.
+     dir     : > 0 = billet SUIVANT, < 0 = billet PRECEDENT
+     o.force : true = geste unique (swipe) : on ignore l'anti-repetition
+     o.hover : index du billet survole, privilegie quand aucun n'est en main (molette)
+   Sans billet en main, on commence par sortir celui du DESSUS de la pile : le premier
+   " suivant " fait donc apparaitre la pile au lieu de ne rien faire.
+   Renvoie true si quelque chose a bouge. */
+function browseTickets(dir, o){
+  o = o || {};
+  if(openPanel || detailOpen || stampingLock || boothsClosed || !heroActive) return false;
+  if(awardTaken || awardNext) return false;              // une main = une chose
+  if(heroIdx >= 0) return cycleHero(dir, o.force);        // un billet est en main : on feuillette
+  const top = (o.hover >= 0 && tickets[o.hover]) || pileTop();
+  if(!top) return false;                                 // tout est tamponne : plus rien a sortir
+  showHero(top.i, false, dir);
+  return true;
 }
 function rowLayout(){
   const k = stampedOrder.length; if(!k || !camera) return;
@@ -1799,14 +2252,21 @@ function rowLayout(){
 }
 function stackLayout(){
   if(!tickets.length) return;
-  // pile FIXE et plate posee sur le comptoir : chaque billet garde TOUJOURS le meme
+  // pile FIXE posee sur le comptoir : chaque billet garde TOUJOURS le meme
   // emplacement (deduit de son index), donc la pile ne se reorganise plus quand on
   // feuillette les billets ou qu'on en tamponne un.
   const BX = PILE_X, BZ = PILE_Z, BY = PILE_Y;
   const mid = (tickets.length - 1)/2;
+  const aspect = viewAspect();
   // La pile grossit en portrait : a la meme taille qu'en desktop, elle ne fait
   // que quelques dizaines de pixels de large sur un ecran etroit.
-  const pileScale = (innerWidth/innerHeight) < .85 ? .52 : (innerWidth/innerHeight) < 1.3 ? .42 : .33;
+  const pileScale = aspect < .85 ? .52 : aspect < 1.3 ? .42 : .33;
+  /* Et sur un cadre ETROIT, la camera est loin du comptoir : vue de si loin, une pile
+     bien a plat ne serait qu'un trait de quelques pixels, impossible a voir et a viser.
+     On la REDRESSE donc legerement (11 degres) pour qu'elle se lise comme une pile de
+     billets — geste purement " responsive ", nul sur un ecran large (aspect >= 1,3),
+     ou la pose d'origine, bien plate, est conservee a l'identique. */
+  const lean = .20 * clamp((1.3 - aspect)/.45, 0, 1);
   const k = pileScale/.33;                       // homothetie de la pile (positions + tailles)
   tickets.forEach(t => {
     if(t.stamped || t.i === heroIdx) return;      // en main (hero) ou deja punaise : hors de la pile
@@ -1815,7 +2275,7 @@ function stackLayout(){
       x: BX + off*.006*k,
       y: BY + t.i*.0045*k,                        // epaisseur de la pile (index stable)
       z: BZ + off*.006*k,
-      rx: -Math.PI/2, ry: 0, scale: pileScale,    // bien a plat, sans oscillation
+      rx: -Math.PI/2 + lean, ry: 0, scale: pileScale,   // a plat (ou redressee en portrait)
     };
   });
 }
@@ -1832,16 +2292,28 @@ function placeFacade(){
    s'elargissent pour boucher toute la fenetre de caisse (curtainT : 0 = ouvert, 1 = ferme). */
 function layoutCurtains(){
   if(!camera || !boothCurtains.length) return;
-  const aspect = innerWidth/innerHeight;
+  const aspect = viewAspect();
   const tanF = Math.tan(camera.fov*Math.PI/360);
   const dC = Math.max(1, camera.position.z - .16);        // plan des rideaux (z monde ~ .16)
-  const cx = clamp(tanF*dC*aspect*1.02, 2.2, 5.0);        // centre du rideau ouvert ~ bord de l'ecran
+  /* Rideau ouvert : centre sur le bord de l'ecran. Sur un cadre etroit, ce bord tombe
+     DEVANT les affiches anglaises (posees a +/-2,51 m sur le mur du fond) : on repousse
+     alors le rideau juste ce qu'il faut pour que l'affiche reste entierement visible.
+     Sur un ecran large, la regle ne change rien : le rideau garde sa place d'origine. */
+  const posterOutAtCurtain = (POSTER_X0 + POSTER_HW)*(camera.position.z - .16)
+                                                      /(camera.position.z - WALL_Z);
+  const cx = Math.max(clamp(tanF*dC*aspect*1.02, 2.2, 5.0), posterOutAtCurtain + .37);
   const halfW = tanF*dC*aspect*1.06;                      // demi-largeur REELLEMENT visible (+ marge) au plan des rideaux
   const halfH = tanF*dC*1.06;                             // demi-hauteur visible (+ marge)
   const t = curtainT;
   const openY = .55, closeY = camLookY;
   const scaleX = lerp(1, Math.max(.7, halfW)/.7, t);      // elargit pour couvrir la moitie de l'ecran
-  const scaleY = lerp(1, Math.max(1, (halfH*2)/3.6), t);  // etire pour couvrir toute la hauteur
+  /* Hauteur du rideau OUVERT : il doit encadrer l'ecran (bords haut et bas couverts).
+     Sur un ecran large il l'est deja a l'echelle 1 : rien ne change. Sur un cadre haut
+     (portrait de telephone), il faut l'etirer, sinon le rideau ouvert ne serait qu'un
+     moignon rouge au milieu du bord. Ferme, il couvre la fenetre de caisse, comme avant. */
+  const coverOpen = Math.max(1, halfH*1.15/1.8);
+  const coverShut = Math.max(1, (halfH*2)/3.6);
+  const scaleY = lerp(coverOpen, coverShut, t);            // etire pour couvrir toute la hauteur
   boothCurtains.forEach(c => {
     const sgn = c.userData.sgn || 1;
     c.position.x = sgn * lerp(cx, halfW/2, t);
@@ -1853,21 +2325,18 @@ function layoutCurtains(){
    legerement a gauche de la pile desormais centree). */
 function placeBell(){
   if(!boothBell || !camera) return;
-  const tanX = Math.tan(camera.fov*Math.PI/360)*(innerWidth/innerHeight);
+  const v = viewSize();
+  const tanX = Math.tan(camera.fov*Math.PI/360)*(v.w/v.h);
   const camZ = Math.max(1, camera.position.z);
   const depth = Math.max(.5, camZ - boothBell.position.z);
   boothBell.position.x = BELL_NDC * depth * tanX;
-  if(bellHint){                       // l'invite " sonnez la cloche " se cale SOUS la cloche, a l'ecran
-    camera.updateMatrixWorld();        // la scene n'est pas encore rendue ici : la matrice inverse peut etre perimee
+  if(bellHint){
+    camera.updateMatrixWorld();
     bellNdc.set(boothBell.position.x, boothBell.position.y, boothBell.position.z).project(camera);
     const L = Math.min(94, Math.max(6, (bellNdc.x + 1) * 50));
-    let topPct = Math.min(84, Math.max(12, (1 - bellNdc.y) * 50 + 12));
-    // l'invite ne doit jamais passer SOUS la barre de caisse du bas
-    const barPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar")) || 56;
-    const maxTop = innerHeight - barPx - (bellHint.offsetHeight || 22) - 10;
-    if(maxTop > 0) topPct = Math.min(topPct, maxTop / innerHeight * 100);
     bellHint.style.left = L + "%";
-    bellHint.style.top  = topPct + "%";
+    bellHint.style.bottom = "calc(var(--bar) + 40px + var(--sab))";
+    bellHint.style.top = "auto";
   }
 }
 function pickBell(px,py){
@@ -1879,18 +2348,19 @@ function pickBell(px,py){
 /* La cloche bascule le guichet : rideaux ouverts <-> fermes. */
 function toggleCurtains(){
   boothsClosed = !boothsClosed;
+  syncBoothState();                                // l'invite suit l'etat du rideau
   if(boothsClosed){
     if(detailOpen) closeDetail();
-    if(focused) unfocusTicket();
     if(heroIdx >= 0) toPile(false);
+    if(awardTaken) putAward();                      // la statuette en main se range aussi (comme le billet)
     document.body.classList.remove("ticket-open");
-    if(ticketBar){ ticketBar.classList.remove("show"); ticketBar.setAttribute("aria-hidden","true"); }
-    if(hint) hint.classList.add("hide");
+    /* la barre inferieure reste visible : la liste des projets doit rester joignable.
+       Seul le tampon disparait (body:not(.hand) .btn--stamp{display:none}). */
+    document.body.classList.remove("hand");
   } else {
-    if(hint) hint.classList.remove("hide");
     syncHandUI();
   }
-  snd.bell();
+  /* sound removed */
 }
 /* Eclairage : guichet ferme -> tout s'eteint SAUF la cloche ; la pile n'est plus mise en avant. */
 function applyCurtainLighting(){
@@ -1909,7 +2379,7 @@ function applyCurtainLighting(){
   if(bellMatRef)      bellMatRef.emissive.setRGB(.62*t, .40*t, .15*t);
   if(bellLight)       bellLight.intensity       = lerp(0, 2.6, t);
   if(bellGlow)        bellGlow.material.opacity = lerp(0, .7, t);
-  for(const m of awardEnvMats) if(m && m.envMapIntensity !== undefined) m.envMapIntensity = lerp(.95, .06, t);
+  for(const m of awardEnvMats) if(m && m.envMapIntensity !== undefined) m.envMapIntensity = lerp(m.userData.envI || .95, .06, t);
 }
 /* ======== Projecteur du curseur : un faisceau doux descend vers le point vise, un vrai
    SpotLight eclaire la surface, et une tache de lumiere se pose SUR cette surface.
@@ -2019,7 +2489,7 @@ function placeCursorBeam(dt){
    peu si l'ecran est etroit, afin qu'elle reste lisible et jamais cachee. */
 function placeClock(){
   if(!boothClock || !camera) return;
-  const aspect = innerWidth/innerHeight;
+  const aspect = viewAspect();
   const tanF = Math.tan(camera.fov*Math.PI/360);
   const tanX = tanF*aspect;
   const camZ = Math.max(1, camera.position.z);
@@ -2036,7 +2506,14 @@ function placeClock(){
   const halfNdc = .31 / (dz * tanX);
   const room = Math.max(.03, (plaqueNdc - leftNdc) / 2 - .015);  // demi-place disponible (avec marge)
   const s = clamp(room / halfNdc, .66, 1);                       // on retrecit seulement si necessaire
-  boothClock.position.x = clamp(midNdc * dz * tanX, -4.5, -2.1);
+  const rN = Math.min(.48, halfNdc * s);                         // demi-largeur apparente, une fois posee
+  const want = Math.min(midNdc, -2.1 / (dz * tanX));              // jamais a droite de la plaque
+  /* Ecran tres etroit : l'espace libre entre la plaque et le bord peut tomber hors
+     champ. L'horloge est alors soit ENTIEREMENT dans le cadre, soit franchement
+     dehors : jamais coupee en deux par le bord de l'ecran. */
+  const ndc = (Math.abs(want) - rN >= 1) ? want
+                                         : clamp(want, -(1 - .02 - rN), -(rN + .02));
+  boothClock.position.x = ndc * dz * tanX;
   boothClock.scale.setScalar(s);
 }
 /* ======== Statuettes CESAR + OSCAR : posees sur le comptoir, juste a DROITE de l'affiche rouge ========
@@ -2046,23 +2523,116 @@ function placeClock(){
    deux restent ainsi toujours adjacents quelle que soit la largeur de l'ecran. */
 function placeCesar(){
   if(!boothCesar || !camera) return;
-  const aspect = innerWidth/innerHeight;
+  const aspect = viewAspect();
   const tanX = Math.tan(camera.fov*Math.PI/360)*aspect;
   const camZ = Math.max(1, camera.position.z);
   const posterRightNdc = 2.06 / Math.max(.25, (camZ - .025) * tanX);   // bord droit de l'affiche rouge
-  const depth = Math.max(.5, camZ - boothCesar.position.z);
+  const cz = boothCesar.userData.home.z;                               // plan du comptoir (pose d'origine, meme si en main)
+  const depth = Math.max(.5, camZ - cz);
   const halfNdc = CESAR_HALF_W / (depth * tanX);                        // demi-largeur apparente du Cesar
   // centre du Cesar : a droite de l'affiche, mais l'ensemble reste entierement a l'ecran
   let ndc = Math.max(posterRightNdc + .05 + halfNdc, .58);
   ndc = clamp(ndc, .34 + halfNdc, .96 - halfNdc);
-  boothCesar.position.x = ndc * depth * tanX;
-  if(boothOscar){
-    // l'Oscar partage le meme plan : un simple decalage monde le colle au Cesar
-    boothOscar.position.x = boothCesar.position.x - AWARD_GAP;
+  // on ne cale que la " maison " : la boucle de rendu applique la pose reelle
+  // (les statuettes peuvent etre en main au moment du redimensionnement)
+  boothCesar.userData.home.x = ndc * depth * tanX;
+  if(boothOscar) boothOscar.userData.home.x = boothCesar.userData.home.x - AWARD_GAP;
+}
+/* ======== Affiches anglaises : plaquees sur le mur du fond, de part et d'autre du panneau ========
+   La portion de mur visible se reduit avec la largeur de l'ecran : chaque affiche est donc
+   soit ENTIEREMENT dans le cadre (un peu reduite si besoin), soit franchement hors champ —
+   jamais coupee en deux par le bord de l'ecran. Sur un ecran large, rien ne bouge. */
+const WALL_Z = -2.19, POSTER_X0 = 2.51, POSTER_HW = .525, WALL_MARGIN = .04;
+function placePosters(){
+  if(!camera) return;
+  const tanX = Math.tan(camera.fov*Math.PI/360)*viewAspect();
+  const camZ = Math.max(1, camera.position.z);
+  const halfW = (camZ - WALL_Z) * tanX;               // demi-largeur visible sur le mur du fond
+  const avail = halfW - WALL_MARGIN - POSTER_X0;      // place restante a la position d'origine
+  for(const pg of boothPosters){
+    const sgn = pg.position.x < 0 ? -1 : 1;
+    if(avail >= POSTER_HW*.62){                       // ca tient : on garde la pose (reduite si besoin)
+      pg.position.x = sgn * POSTER_X0;
+      pg.scale.setScalar(Math.min(1, avail / POSTER_HW));
+    } else {                                          // pas la place : on la pousse entierement hors champ
+      pg.position.x = sgn * (halfW + POSTER_HW + .05);
+      pg.scale.setScalar(1);
+    }
   }
 }
-function setStampCounter(){
-  if(stampCounter) stampCounter.querySelector("b").textContent = String(stampedOrder.length);
+/* ======== Pancarte des tarifs : petit chevalet pose SUR le comptoir, a droite ========
+   Elle vit au premier plan : sur un ecran etroit elle se reduit et glisse vers la gauche
+   pour rester ENTIEREMENT dans le cadre, jamais rognee par le bord droit. Sur un ecran
+   large, elle ne bouge pas d'un millimetre (meme pose qu'a l'origine). */
+const TARIFS_X0 = 1.00, TARIFS_Z = .90, TARIFS_HW = .47;   // pose d'origine / demi-largeur (0,94 m)
+function placeTarifs(){
+  if(!boothTarifs || !camera) return;
+  const tanX = Math.tan(camera.fov*Math.PI/360)*viewAspect();
+  const camZ = Math.max(1, camera.position.z);
+  const depth = Math.max(.5, camZ - TARIFS_Z);
+  const halfNdc = TARIFS_HW / (depth * tanX);         // demi-largeur apparente a l'echelle 1
+  const s = (halfNdc > .31) ? .62 / (halfNdc * 2) : 1;   // on reduit pour tenir dans la bande droite
+  const ndc = clamp(TARIFS_X0 / (depth * tanX), -1 + halfNdc*s + .03, .96 - halfNdc*s);
+  boothTarifs.position.x = ndc * depth * tanX;
+  boothTarifs.scale.setScalar(s);
+}
+/* ===== UN SEUL point d'entree : ouvrir DIRECTEMENT l'affiche d'un projet =====
+   Reutilise par la liste de la barre inferieure, le repli sans WebGL, etc.
+   Aucune logique d'ouverture n'est dupliquee : c'est openDetail() qui affiche.
+   Le projet est identifie par son id (byId) : n'importe quel projet marche,
+   pas seulement le premier ni le dernier. */
+function openProjectDirect(p){
+  if(!p) return;
+  if(boothsClosed){                              // guichet ferme -> on l'ouvre pour voir l'affiche
+    boothsClosed = false;
+    updateCurtains(performance.now()/1000);
+    applyCurtainLighting();
+    syncHandUI();
+  }
+  if(openPanel) closePanel();                    // une section plein ecran ... on la referme
+  if(awardTaken) putAward();                     // une main = une chose
+  const t = byId[p.id];
+  if(t){
+    t.stamped = true;                            // le billet rejoint le rang (etat coherent)
+    if(!stampedOrder.includes(t.p.id)) stampedOrder.push(t.p.id);
+    rowLayout();
+    stackLayout();
+  }
+  /* On va DROIT a l'affiche : pas d'etape intermediaire par le ticket en main. */
+  openDetail(p);
+}
+
+function buildProjectList(){
+  if(!projectListEl) return;
+  projectListEl.innerHTML = "";
+  PROJECTS.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.className = "project-list-item";
+    btn.type = "button";
+    btn.dataset.project = p.id;
+    btn.textContent = p.title.toUpperCase();
+    /* stopPropagation : le clic ne doit PAS atteindre le canvas (ni un ticket
+       derriere la barre). Le bouton est un vrai bouton : accessible au clavier. */
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openProjectDirect(p);
+    });
+    projectListEl.appendChild(btn);
+  });
+}
+
+function updateProjectListActive(){
+  if(!projectListEl) return;
+  const items = projectListEl.querySelectorAll(".project-list-item");
+  // projet mis en avant : celui tenu en main, sinon celui dont l'affiche est ouverte
+  let activeId = (heroIdx >= 0 && tickets[heroIdx]) ? tickets[heroIdx].p.id : null;
+  if(detailOpen && !activeId){
+    const cur = PROJECTS.find(p => p.title === $("#dTitle").textContent);
+    if(cur) activeId = cur.id;
+  }
+  items.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.project === activeId);
+  });
 }
 window.__v7 = () => ({
   hero: heroIdx,
@@ -2074,13 +2644,45 @@ window.__v7 = () => ({
   closed: boothsClosed, curtainT: +curtainT.toFixed(3),
 });
 
-/* ================== Disposition : camera collee au comptoir ================== */
+/* ================== Disposition : cadrage de la camera ==================
+   Le cadrage repond a DEUX contraintes, dans cet ordre :
+     1. le decor du mur du fond (panneau des billets 3,72 m + plaque BOX OFFICE 3,60 m +
+        les DEUX affiches anglaises posees a +/-2,51 m) doit tenir en LARGEUR, quel que
+        soit le format : c'est le decor qui raconte le guichet ;
+     2. le comptoir et ses objets (pile de billets, cloche, statuettes, chevalet) doivent
+        rester au premier plan, assez gros pour etre VUS et CLICQUES au doigt.
+   Sur un ecran large (>= 1,30), la camera reste " au comptoir " (3,60 m) : le mur est bien
+   plus large que l'ecran, on ne cherche donc pas a tout voir d'un coup.
+   Sur un ecran etroit (portrait de telephone), les deux contraintes ne peuvent pas etre
+   satisfaites par la seule distance : reculer assez pour cadrer le mur reduirait la pile
+   a quelques pixels de large, en bout de comptoir, donc invisible et intouchable. On
+   ELARGIT DONC LE CHAMP (46 -> 64 degres) et on ne recule que du strict necessaire.
+   Rien n'est deforme, rien n'est re-echainne : seuls la distance et le champ bougent,
+   jamais l'echelle des objets (1 unite = 1 metre, toujours). */
+const FRAME_HALF_W = POSTER_X0 + POSTER_HW + .065;      // 3,10 m : demi-largeur de decor a cadrer
+const FOV_WIDE = 46, FOV_NARROW = 64;                   // champ grand ecran / champ portrait
+const CZ_TABLET = 5.0, CZ_DESKTOP = 3.6, CZ_MAX = 12;   // distances de repli par palier
+/* Champ : 46 degres des que le cadre est large, jusqu'a 64 degres au format d'un telephone
+   en portrait ; varie en douceur pour qu'aucun format ne " saute ". */
+function frameFov(aspect){
+  if(aspect >= .85) return FOV_WIDE;
+  return FOV_WIDE + Math.min(1, (.85 - aspect)/.39) * (FOV_NARROW - FOV_WIDE);
+}
+/* Distance qui fait tenir le decor du mur. Au plan du mur, la demi-largeur visible vaut
+   (cz - WALL_Z)*tanF*aspect : on inverse pour trouver cz. Rappel de geometrie : sur un
+   cadre plus haut que large, la hauteur visible vaut TOUJOURS largeur/aspect ; elargir le
+   champ ne " rapproche " donc pas l'image, ca evite seulement de reculer de 3 m de plus. */
+function frameDistance(aspect, tanF){
+  return FRAME_HALF_W / (tanF*aspect) + WALL_Z;
+}
 function computeLayout(){
-  const aspect = innerWidth/innerHeight;
-  let cz;
-  if(aspect < .85) cz = 7.4;          // mobile : recule pour tenir la largeur
-  else if(aspect < 1.3) cz = 5.0;     // tablette
-  else cz = 3.6;                      // bureau : on est AU comptoir
+  const aspect = viewAspect();
+  const narrow = aspect < 1.30;
+  camera.fov = frameFov(aspect);
+  const tanF = Math.tan(camera.fov*Math.PI/360);
+  const cz = narrow ? clamp(frameDistance(aspect, tanF), CZ_TABLET, CZ_MAX) : CZ_DESKTOP;
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
   camBaseY = .72;
   camLookY = camBaseY - .05*cz;       // leger plongeon sur le comptoir
   camera.position.set(0, camBaseY, cz);
@@ -2091,8 +2693,10 @@ function computeLayout(){
   stackLayout();                      // pose la pile des billets encore a tamponner sur le comptoir
   placeFacade();                      // recolle rideaux + affiches aux bords de l'ecran
   placeBell();                        // cale la cloche sur le comptoir, visible quelle que soit la largeur
+  placePosters();                     // affiches du mur : entierement dans le cadre, ou franchement hors champ
   placeClock();                       // cale l'horloge a gauche de la plaque BOX OFFICE
   placeCesar();                       // cale la statuette a droite de l'affiche rouge, sur le comptoir
+  placeTarifs();                      // cale le chevalet des tarifs : jamais rogne par le bord droit
 }
 
 /* ================== Interactions ================== */
@@ -2122,36 +2726,44 @@ function pickPile(px,py){
   const hits = raycaster.intersectObjects(meshes, false);
   return hits.length ? tickets[hits[0].object.userData.i] : null;
 }
-function setActive(t,on){
-  if(!t || t.activPrev === on) return;
-  t.activPrev = on;
-  // Plus aucun cadre colore n'est dessine sur le billet : on garde juste l'etat a jour.
+
+/* ================== Trophees contemplatifs (Cesar / Oscar) ==================
+   MEME dynamique que les billets : un clic la PRENT (elle monte devant la
+   camera, legerement inclinee pour lire la plaque GRAVEE de son socle), on la
+   TOURNE AU POINTEUR comme un billet en main (glisser horizontal = rotation,
+   vertical = inclinaison pour voir le socle ou la face), un clic a cote —
+   Echap, la molette — la REPOSE sur le comptoir. Changer de statuette est
+   SEQUENTIEL : la main est RANGEE au comptoir, et seulement une fois posee
+   (at ~ 0) la suivante vient en main. Aucun lien : un trophée digne des
+   ceremonies, on le manipule et on le regarde, c'est tout. */
+function pickAward(px,py){
+  const list = [boothCesar, boothOscar].filter(Boolean);
+  if(!list.length || !camera) return null;
+  pointerNdc.x = px; pointerNdc.y = py;
+  raycaster.setFromCamera(pointerNdc, camera);
+  const hits = raycaster.intersectObjects(list, true);   // recursive : les statuettes sont des groupes
+  return hits.length ? hits[0].object : null;
+}
+function awardRoot(obj){                                 // remonte du mesh percute jusqu'a la statuette
+  let o = obj;
+  while(o){ if(o === boothCesar || o === boothOscar) return o; o = o.parent; }
+  return null;
+}
+function takeAward(g){
+  if(!g || awardTaken === g) return;
+  awardTaken = g; awardDrag = false; awardNext = null; /* sound removed */
+  g.userData.dy = g.userData.dx = g.userData.dyc = g.userData.dxc = 0;  // prise toujours a nouveau tout droit
+}
+function putAward(){
+  awardNext = null;                       // on repose aussi la prise eventuellement en attente
+  if(!awardTaken) return;
+  awardTaken.userData.dy = awardTaken.userData.dx = 0;  // il se redresse en rejoignant le comptoir
+  awardTaken = null; awardDrag = false; /* sound removed */
 }
 function hoverTicket(t){
   if(hovered === t) return;
-  setActive(hovered, false);
   hovered = t;
-  setActive(t, true);
-  if(t && !focused) snd.hover();
-}
-function focusTicket(t){
-  if(!t || focused === t) return;
-  focused = t;
-  tickets.forEach(o => setActive(o, o === t));
-  t.dragY=0; t.dragX=0; t.dragYc=0; t.dragXc=0; t.stampAnim=0; t.stampDone=false; t.stamping=false;
-  document.body.classList.add("ticket-open");
-  ticketBar.classList.add("show"); ticketBar.setAttribute("aria-hidden","false");
-  if(hint) hint.classList.add("hide");
-  snd.pick();
-}
-function unfocusTicket(){
-  if(!focused) return;
-  focused = null; dragging = false;
-  tickets.forEach(o => setActive(o, false));
-  document.body.classList.remove("ticket-open");
-  ticketBar.classList.remove("show");
-  if(hint) hint.classList.remove("hide");
-  snd.put();
+  /* sound removed */
 }
 function doStamp(){
   if(stampingLock || openPanel || detailOpen || boothsClosed || !tickets.length) return;
@@ -2159,17 +2771,16 @@ function doStamp(){
   if(!t || t.stamped) return;
   stampingLock = true;
   if(hovered === t) hovered = null;
-  setActive(t, false);                 // on retire le cadre " PRENDRE " : billet au propre
   // 0) on remet d'abord le billet droit, face a nous, puis on tamponne
   t.dragY = 0; t.dragX = 0;
-  snd.paper();
+  /* sound removed */
   let waited = 0;
   const stampWhenStraight = () => {
     waited += 90;
     const straight = Math.abs(t.dragYc) < .02 && Math.abs(t.dragXc) < .02;
     if(!straight && waited < 640){ setTimeout(stampWhenStraight, 90); return; }
     // 1) le billet est droit : le tampon tombe dessus, qui reste en grand au premier plan
-    snd.stamp(); shake = .45;
+    /* sound removed */ shake = .45;
     t.stampAnim = 0.0001; t.stamping = true;
     // 2) une fois tamponne, le billet part dans le fond (il rejoint le rang)
     setTimeout(() => {
@@ -2178,39 +2789,101 @@ function doStamp(){
       t.stamped = true;
       rowLayout();
       stackLayout();
-      setStampCounter();
-      setActive(t, false);
       // 3) la fiche s'ouvre ; on revient a la pile (le billet a rejoint le mur)
       setTimeout(() => {
-        openDetail(t.p);
-        toPile(false);
-        stampingLock = false;
+        /* try/finally INDISPENSABLE : si l'ouverture de la fiche echouait, stampingLock
+           resterait a true et TOUTE l'interaction serait morte jusqu'au rechargement. */
+        try{ openDetail(t.p); }
+        finally{ toPile(false); stampingLock = false; }
       }, 620);
     }, 760);
   };
   stampWhenStraight();
 }
 
+/* ===== Aide a la visee : rayon exact, puis " marge de touche " =====
+   Vue de loin (portrait de telephone), une pile de billets posee a plat ne fait que
+   quelques pixels de haut et une statuette que quelques pixels de large : le doigt tombe
+   a cote, le rayon ne touche rien, et l'objet semble mort. Le rayon exact reste la regle
+   premiere ; cette tolerance (un rayon de TAP_RADIUS_PX pixels autour du CENTRE de
+   l'objet) ne sert QUE si le rayon n'a rien touche. Sur un ecran large elle ne sert
+   jamais : les objets y sont grands. */
+const nearNdc = new THREE.Vector3();
+function objectNdcPos(obj, out){
+  obj.updateWorldMatrix(true, false);
+  return out.setFromMatrixPosition(obj.matrixWorld).project(camera);
+}
+function ndcDeltaPx(px, py, obj){                  // distance ecran (px) entre le doigt et l'objet
+  objectNdcPos(obj, nearNdc);
+  const s = viewSize();
+  return Math.hypot((px - nearNdc.x)*s.w/2, (py - nearNdc.y)*s.h/2);
+}
+function nearObject(px, py, obj){ return !!obj && ndcDeltaPx(px, py, obj) <= TAP_RADIUS_PX; }
+function nearBell(px, py){ return nearObject(px, py, boothBell); }
+function nearAward(px, py){                        // statuette la plus proche du doigt
+  let best = null, bd = TAP_RADIUS_PX;
+  for(const g of [boothCesar, boothOscar]){
+    if(!g) continue;
+    const d = ndcDeltaPx(px, py, g);
+    if(d <= bd){ bd = d; best = g; }
+  }
+  return best;
+}
+/* Carte du DESSUS de la pile : le plus grand index encore a tamponner (meme regle que la
+   molette). Sert au filet tactile et a la molette. */
+function pileTop(){
+  for(let i = tickets.length - 1; i >= 0; i--){ if(!tickets[i].stamped && i !== heroIdx) return tickets[i]; }
+  return null;
+}
+/* Evenement " mouse " de compatibilite qui suit de pres un vrai doigt : on l'ignore, sinon
+   l'action serait jouee deux fois (la cloche se rouvrirait aussitot, etc.). */
+const GHOST_TOUCH_MS = 900;
+function isGhostMouse(e){ return e.pointerType === "mouse" && (performance.now() - lastTouchAt) < GHOST_TOUCH_MS; }
+
 /* -- evenements -- */
 function onPointerMove(e){
   if(openPanel || !heroActive || detailOpen || stampingLock) return;
-  const px = (e.clientX/innerWidth)*2-1, py = -(e.clientY/innerHeight)*2+1;
+  const s = viewSize();
+  const px = (e.clientX/s.w)*2-1, py = -(e.clientY/s.h)*2+1;
   if(dragging && lastDrag){
     const dx = e.clientX - lastDrag.x, dy = e.clientY - lastDrag.y;
     lastDrag = {x:e.clientX, y:e.clientY};
     const t = tickets[heroIdx]; if(!t) return;
     t.dragY += dx*.009; t.dragX = clamp(t.dragX + dy*.008, -.4, .4);
-    if(Math.abs(dx) > 1 || Math.abs(dy) > 1) snd.paper();
+    if(Math.abs(dx) > 1 || Math.abs(dy) > 1) { /* sound removed */ }
     return;
   }
+  if(awardDrag && lastDrag){    // trophee en main : glisser = le tourner, comme un billet
+    const dx = e.clientX - lastDrag.x, dy = e.clientY - lastDrag.y;
+    lastDrag = {x:e.clientX, y:e.clientY};
+    const g = awardTaken;
+    if(g){
+      g.userData.dy += dx*.009;                       // horizontal -> rotation lente sur l'axe
+      g.userData.dx = clamp(g.userData.dx + dy*.008, -.4, .4);   // vertical -> inclinaison
+      if(Math.abs(dx) > 1 || Math.abs(dy) > 1) { /* sound removed */ }
+    }
+    return;
+  }
+  /* Pas de survol AU DOIGT : un doigt n'est pas une souris, il n'y a pas de curseur, et les
+     pointermove qui suivent un appui ne doivent pas allumer les objets sous le doigt. Le
+     survol (curseur + mise en avant) reste donc reserve a la souris et au stylet. */
+  if(e.pointerType !== "mouse" && e.pointerType !== "pen") return;
   if(boothsClosed){                       // guichet ferme : seul le survol de la cloche compte
     stage.style.cursor = pickBell(px,py) ? "pointer" : "";
-    if(hovered){ setActive(hovered, false); hovered = null; }
+    if(hovered){ hovered = null; }
     pileHover = null;
+    awardHover = null;
     return;
   }
-  if(heroIdx < 0){                       // pile au repos : on survole la pile, la cloche ou les billets tamponnes
+  if(heroIdx < 0){                       // pile au repos : on survole la pile, la cloche, les trophees ou les billets tamponnes
     if(pickBell(px,py)){ stage.style.cursor = "pointer"; pileHover = null; hoverTicket(null); return; }
+    const aw = awardRoot(pickAward(px,py));            // trophees cliquables (prise " comme un billet ")
+    if(aw){
+      stage.style.cursor = "pointer"; pileHover = null; hoverTicket(null);
+      if(awardHover !== aw){ awardHover = aw; /* sound removed */ }
+      return;
+    }
+    awardHover = null;
     const pinned = pickTicket(px,py);
     const p = pinned ? null : pickPile(px,py);
     pileHover = p;
@@ -2218,9 +2891,10 @@ function onPointerMove(e){
     hoverTicket(pinned);
     return;
   }
+  awardHover = null;   // billet en main : les trophees ne repondent pas
   const hitH = pickHero(px,py);
   if(hitH){
-    if(hovered !== hitH){ if(hovered) setActive(hovered, false); hovered = hitH; snd.hover(); }
+    if(hovered !== hitH){ hovered = hitH; /* sound removed */ }
     stage.style.cursor = "grab";
     return;
   }
@@ -2230,61 +2904,159 @@ function onPointerMove(e){
   stage.style.cursor = "";               // cliquable -> revoir l'affiche
   hoverTicket(null);
 }
+/* ===== Un geste = un doigt, suivi du pose au leve =====
+   Debut de geste : on ne joue que les actions qui ont BESOIN de l'appui pour demarrer un
+   glisser (saisir le billet en main, saisir une statuette, sortir la carte du dessus).
+   Tout le reste (ouvrir une fiche, sonner la cloche, reposer) est mis en ATTENTE et ne
+   sera joue qu'au leve, et seulement s'il n'y a pas eu de swipe : c'est ce qui supprime
+   les clics accidentels pendant un swipe. */
+
+/* ===== SWIPE VERTICAL : le feuilletage de la pile =====
+   Doigt vers le HAUT = billet suivant, vers le BAS = billet precedent. Le vertical est le
+   sens de la pile (on pousse les billets) et c'est aussi le sens que la molette et le pave
+   tactile envoient deja (deltaY) : doigt et pave avancent donc dans le meme sens.
+   Un geste n'est un swipe que s'il est franc, pour ne pas confondre :
+     - avec un TOUCHER (ou un clic)  -> il faut un minimum de deplacement ;
+     - avec une ROTATION du billet en main (glisser vertical = pencher le billet, qui
+       sature a ~50 px) -> ce minimum est large, et un petit glissement lent reste une rotation ;
+     - avec un geste de biais -> il faut une nette dominante verticale.
+   Renvoie 0 (pas un swipe), 1 (suivant) ou -1 (precedent).
+   Fonction PURE (aucun etat) : la regle se verifie toute seule, hors scene. */
+const SWIPE_MIN_FRAC = .14, SWIPE_MIN_PX = 44, SWIPE_MAX_PX = 120;   // seuil de deplacement
+function swipeDir(dx, dy, dt, h){
+  const minDy = clamp(h*SWIPE_MIN_FRAC, SWIPE_MIN_PX, SWIPE_MAX_PX); // proportionnel a la hauteur d'ecran
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if(ady < minDy) return 0;                    // trop court : c'est un toucher
+  if(ady < adx*1.15) return 0;                 // trop en biais : ce n'est pas un swipe vertical
+  if(dt > 1400) return 0;                      // le doigt est reste pose : ce n'est plus un geste
+  if(ady/dt < .30 && ady < minDy*1.8) return 0;   // ni vif (coup de doigt) ni franchement long
+  return dy < 0 ? 1 : -1;                      // doigt vers le HAUT = suivant
+}
 function onPointerDown(e){
   unlockMedia();
   if(e.button !== 0 && e.pointerType !== "touch") return;
+  if(isGhostMouse(e)) return;                    // evenement " mouse " fantome apres un doigt
   if(e.target.closest("a,button,input,textarea,select,label,#detail,#mobileMenu,#ticketBar")) return;
   if(openPanel || !heroActive || detailOpen || stampingLock) return;
-  const px = (e.clientX/innerWidth)*2-1, py = -(e.clientY/innerHeight)*2+1;
-  const onBell = pickBell(px,py);
+  if(gestureId !== null) return;                 // un seul doigt suivi a la fois
+  const s = viewSize();
+  const px = (e.clientX/s.w)*2-1, py = -(e.clientY/s.h)*2+1;
+  gestureId = e.pointerId;
+  pendingTap = null;
+  tookAtDown = false;                            // rien saisi pour l'instant (voir plus bas)
+  swipeX = e.clientX; swipeY = e.clientY; swipeT = performance.now();
+  lastDrag = {x:e.clientX, y:e.clientY};
+  const onBell = pickBell(px,py) || nearBell(px,py);
   if(boothsClosed){             // guichet ferme : seule la cloche repond (reouvre les rideaux)
-    if(onBell){ e.preventDefault(); toggleCurtains(); }
+    e.preventDefault();
+    if(onBell) pendingTap = toggleCurtains;
     return;
   }
   e.preventDefault();
-  lastDrag = {x:e.clientX, y:e.clientY};
-  swipeX = e.clientX; swipeY = e.clientY; swipeT = performance.now();
   if(stage) stage.style.cursor = "";
+  if(awardTaken){               // trophee en main : clic dessus = on le saisit pour le tourner, ailleurs = repos
+    const a = awardRoot(pickAward(px,py));
+    if(a === awardTaken){ awardDrag = true; /* sound removed */ return; }
+    if(a){                       // changement de statuette : on RANGE d'abord celle en main...
+      putAward();                // ...elle regagne le comptoir (snd.put + descente)...
+      awardNext = a;             // ...et celle-ci ne monte QU'UNE FOIS l'autre posee
+      return;
+    }
+    if(onBell) pendingTap = () => { putAward(); toggleCurtains(); };
+    else       pendingTap = putAward;
+    return;
+  }
+  if(awardNext){                 // rangement en cours : la prise promise regit les clics
+    const a = awardRoot(pickAward(px,py));
+    if(a === awardNext) return;  // clic sur la statue promise : on laisse le rangement se derouler
+    awardNext = null;            // tout autre geste abandonne la prise en attente...
+    if(a){ tookAtDown = true; takeAward(a); return; }   // ... sauf clic sur l'autre : on la prend d'un coup
+    if(onBell){ pendingTap = toggleCurtains; return; }
+    // ... sinon on poursuit normalement (pile / billet epingle) : le clic n'est pas perdu
+  }
   if(pickHero(px,py)){          // on saisit le billet en main (on peut le tourner)
-    dragging = true; snd.pick();
+    dragging = true; /* sound removed */
     return;
   }
   const t = pickTicket(px,py);     // un billet deja tamponne -> rouvre sa fiche
-  if(t){ openDetail(t.p); return; }
-  if(heroIdx < 0){                 // au repos : clic sur la pile -> on prend la carte du dessus
+  if(t){ pendingTap = () => openDetail(t.p); return; }
+  if(heroIdx < 0){                 // au repos : on prend la carte du dessus de la pile
+    const a = awardRoot(pickAward(px,py)) || nearAward(px,py);
+    if(a){ tookAtDown = true; takeAward(a); return; }   // clic (meme approximatif) sur une statuette -> comme un billet
     const p = pickPile(px,py);
-    if(p) showHero(p.i, false);
-    else if(onBell) toggleCurtains();   // ... sinon, la cloche ouvre / ferme les rideaux
+    if(p){ tookAtDown = true; showHero(p.i, false); return; }
+    const top = pileTop();                 // filet tactile : pile vue de loin = quelques pixels
+    if(top && nearObject(px,py,top.group)){ tookAtDown = true; showHero(top.i, false); return; }
+    if(onBell) pendingTap = toggleCurtains;   // ... sinon, la cloche ouvre / ferme les rideaux
   } else {                         // clic a cote du billet en main -> on le repose sur la pile
-    if(onBell) toggleCurtains();        // la cloche reste prioritaire sur " reposer le billet "
-    else toPile(false);
+    if(onBell) pendingTap = toggleCurtains;   // la cloche reste prioritaire sur " reposer le billet "
+    else       pendingTap = () => toPile(false);
   }
 }
-function onPointerUp(e){
+/* Fin de geste. Trois issues :
+   - SWIPE VERTICAL (au doigt) : doigt vers le haut = billet suivant, vers le bas = precedent.
+             Un seul changement par geste (on n'agit qu'ici, au relachement), et le billet en
+             main repart bien droit : une navigation ne laisse pas de trace ;
+   - TAP   : deplacement minuscule -> on joue l'action mise en attente ;
+   - ni l'un ni l'autre (glisser pour TOURNER) : rien, l'objet garde l'orientation donnee.
+   On passe par ici pour pointerup ET pour pointercancel / perte de focus : un geste
+   interrompu par le navigateur (barre d'URL, changement d'app, doigt qui sort de la
+   fenetre) ne doit JAMAIS laisser l'appui " colle ". */
+function endGesture(e, cancelled){
+  if(gestureId === null) return;                    // aucun geste en cours
+  if(e && e.pointerId !== gestureId) return;        // un autre doigt : on ne suit que le premier
+  gestureId = null;
+  lastDrag = null;
   dragging = false;
+  awardDrag = false;                                // relache : le trophee garde l'orientation donnee
   if(stage) stage.style.cursor = "";
-  const t = tickets[heroIdx];
-  const dx = e.clientX - swipeX, dy = e.clientY - swipeY;
-  if(Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)*1.4 && (performance.now()-swipeT) < 450
-      && !detailOpen && !openPanel && !stampingLock && !boothsClosed){
-    if(Math.abs(t ? t.dragY : 0) < .35) cycleHero(dx > 0 ? -1 : 1);   // swipe -> billet suivant
+  const action = cancelled ? null : pendingTap;     // action differee : elle est abandonnee si swipe
+  pendingTap = null;
+  if(cancelled) return;
+  const dx = (e ? e.clientX : swipeX) - swipeX, dy = (e ? e.clientY : swipeY) - swipeY;
+  const dt = Math.max(1, performance.now() - swipeT);
+  // le swipe est un geste de DOIGT : a la souris, c'est la molette qui feuillette
+  const dir = (e && e.pointerType === "mouse") ? 0 : swipeDir(dx, dy, dt, viewSize().h);
+  if(dir && !detailOpen && !openPanel && !stampingLock && !boothsClosed){
+    /* Aucun clic ne part : " action " (mise en attente) est abandonnee et le billet en main
+       RESTE en main — un feuilletage ne le repose pas sur la pile. */
+    if(awardTaken || awardNext){                    // une main = une chose (meme regle que la molette) :
+      putAward();                                   // le trophee rejoint le comptoir, le geste s'arrete la
+      return;
+    }
+    /* Si l'appui avait DEJA change de billet (le doigt s'est pose sur la pile, qui occupe le
+       centre de l'ecran), le geste a fait son changement : on ne feuillette pas une seconde
+       fois. UN GESTE = UN BILLET. Resultat : tant qu'aucun billet n'est en main, un swipe
+       (d'un cote comme de l'autre) sort la carte du dessus, ou que le doigt se pose. */
+    if(tookAtDown) return;
+    const t = tickets[heroIdx];
+    if(t){ t.dragY = 0; t.dragX = 0; }              // il repart bien droit
+    browseTickets(dir, {force:true});               // +1 = suivant, -1 = precedent (bornes gerees a l'interieur)
+    return;
   }
+  if(action) action();
 }
+function onPointerUp(e){ endGesture(e, false); }
+function onPointerCancel(e){ endGesture(e, true); }
 function onKeyDown(e){
   if(e.key === "Escape"){
     if(openPanel) closePanel();
     else if(detailOpen) closeDetail();
+    else if(awardTaken || awardNext) putAward();   // le trophee (ou la mise en attente) rejoint le comptoir
     else if(heroIdx >= 0) toPile(false);
-    else if(focused) unfocusTicket();
-    $("#mobileMenu").classList.remove("open");
+    setMobileMenu(false, true);
     return;
   }
   if(detailOpen){
+    // la fiche ouverte : on feuillette les fiches (le defilement du texte reste aux fleches
+    // haut / bas, qui ne sont pas interceptees ici)
     if(e.key === "ArrowRight") stepDetail(1);
     if(e.key === "ArrowLeft") stepDetail(-1);
   } else if(!openPanel && !boothsClosed){
-    if(e.key === "ArrowRight") cycleHero(1);
-    if(e.key === "ArrowLeft") cycleHero(-1);
+    /* Meme navigation que le doigt et la molette : vers le haut (+ pave vers le bas) = suivant.
+       La navigation passe par browseTickets, donc les bornes sont gerees au meme endroit. */
+    if(e.key === "ArrowUp"    || e.key === "ArrowRight") browseTickets(1);
+    if(e.key === "ArrowDown"  || e.key === "ArrowLeft")  browseTickets(-1);
   }
 }
 let wheelAcc = 0, wheelIdle = 0, wheelCool = 0;
@@ -2292,11 +3064,16 @@ function onWheel(e){
   if(openPanel || detailOpen) return;   // laisse defiler le panneau / la fiche
   if(boothsClosed) return;              // guichet ferme : la molette ne selectionne plus de billet
   // molette peu sensible : il faut un vrai cran (delta cumule) pour changer de billet
-  const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
+  const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * viewSize().h : e.deltaY;
 
   // -- la molette REMPLACE le clic, n'importe ou sur la scene : un cran sort la carte
   //    du dessus de la pile, puis la molette feuillette les billets (sens du defilement).
   e.preventDefault();                    // pas de defilement de page : on feuillette les billets
+  if(awardTaken || awardNext){              // une main = une chose : le trophee rejoint le comptoir
+    wheelAcc = 0;
+    putAward();
+    return;
+  }
   if(Date.now() < wheelCool){            // un geste = un billet : on laisse le geste se terminer
     wheelAcc = 0;
     return;
@@ -2305,26 +3082,14 @@ function onWheel(e){
   clearTimeout(wheelIdle);
   wheelIdle = setTimeout(() => { wheelAcc = 0; }, 140);   // on oublie quand on s'arrete
   if(Math.abs(wheelAcc) < 200) return;                    // cran trop leger -> on ignore
-  const dir = px > 0 ? 1 : -1;                            // sens du defilement
+  const dir = px > 0 ? 1 : -1;                            // sens du defilement = sens du doigt
   wheelAcc = 0;
   wheelCool = Date.now() + 360;                           // anti-repetition pendant un long defilement
 
-  if(heroIdx < 0){                       // aucune carte en main -> on sort celle du dessus
-    if(!heroActive || stampingLock) return;
-    let start = pileHover ? pileHover.i : -1;
-    if(start < 0){                       // carte du dessus = plus grand index encore a tamponner
-      for(let i = tickets.length - 1; i >= 0; i--){ if(!tickets[i].stamped){ start = i; break; } }
-    }
-    if(start < 0) return;                // tout est tamponne : il ne reste rien a sortir
-    showHero(start, false, dir);
-    return;
-  }
-  cycleHero(dir);
+  // meme navigation que le doigt : vers le bas / doigt vers le haut = billet suivant.
+  // La carte survolee est privilegiee quand aucun billet n'est en main.
+  browseTickets(dir, {hover: pileHover ? pileHover.i : -1});
 }
-function onScroll(){
-  if(focused && !heroActive) unfocusTicket();
-}
-
 function bindWorld(){
   addEventListener("pointermove", onPointerMove, {passive:true});
   addEventListener("pointermove", trackCursor, {passive:true});   // suit le pointeur pour le projecteur
@@ -2332,38 +3097,66 @@ function bindWorld(){
   addEventListener("pointerup",   trackCursor, {passive:true});
   addEventListener("pointerdown", onPointerDown);
   addEventListener("pointerup", onPointerUp, {passive:true});
+  /* Le doigt peut sortir du canvas, changer d'app ou etre interrompu par le navigateur
+     (barre d'URL, appel entrant, geste systeme) : pointercancel (et la perte de focus)
+     ferment le geste proprement, sinon l'appui resterait " colle ". */
+  addEventListener("pointercancel", onPointerCancel, {passive:true});
+  addEventListener("blur", () => endGesture(null, true));
   addEventListener("keydown", onKeyDown);
   addEventListener("wheel", onWheel, {passive:false});
-  addEventListener("scroll", onScroll, {passive:true});
   addEventListener("resize", onResize);
+  addEventListener("orientationchange", () => setTimeout(onResize, 220), {passive:true});   // rotation : iOS redimensionne apres coup
+  if(window.visualViewport) visualViewport.addEventListener("resize", onResize, {passive:true});   // barre d'URL mobile
   addEventListener("pointerout", e => { if(!e.relatedTarget) cursorOn = false; }, {passive:true});  // souris sortie de la page
   new IntersectionObserver(es => es.forEach(en => {
     heroActive = en.isIntersecting;
-    if(!heroActive && focused) unfocusTicket();
   }), {threshold:.55}).observe($("#hero"));
 }
 /* Pointeur -> NDC (sert au projecteur du curseur). Au doigt : pas de curseur,
    donc le faisceau ne s'allume que pendant l'appui, puis s'eteint au relachement.
    Sur tactile, le navigateur peut renvoyer un pointermove " mouse " fantome juste
    apres le doigt (evenement de compatibilite) : on l'ignore un court instant. */
-let lastTouchAt = -1e9;
 function trackCursor(e){
   const touch = e.pointerType === "touch";
   if(touch) lastTouchAt = performance.now();
   if(e.type === "pointerup"){ if(touch) cursorOn = false; return; }
   if(touch && !e.buttons){ cursorOn = false; return; }
   if(!touch && performance.now() - lastTouchAt < 1200){ cursorOn = false; return; }
-  cursorNdc.x = (e.clientX/innerWidth)*2 - 1;
-  cursorNdc.y = -(e.clientY/innerHeight)*2 + 1;
+  const s = viewSize();
+  cursorNdc.x = (e.clientX/s.w)*2 - 1;
+  cursorNdc.y = -(e.clientY/s.h)*2 + 1;
   cursorOn = true;
 }
+/* Redimensionnement : on regroupe les evenements (rotation, barre d'URL qui se replie,
+   fenetre etiree) en UNE mise a jour par image, au lieu de recalculer toute la scene a
+   chaque evenement. On reajuste aussi la densite de pixels si l'ecran en change. */
+let resizeQueued = false;
 function onResize(){
-  if(!renderer || !camera) return;
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight, false);
-  computeLayout();                   // repositionne camera, rang des billets et rideaux
+  if(!renderer || !camera || resizeQueued) return;
+  resizeQueued = true;
+  requestAnimationFrame(() => {
+    resizeQueued = false;
+    if(!renderer || !camera) return;
+    const dpr = Math.min(devicePixelRatio || 1, 2);          // jamais plus de 2x : leger et net
+    if(renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
+    const v = viewSize();                                    // taille REELLE du canvas (pas innerWidth)
+    camera.aspect = v.w/v.h;                                 // ratio exact : aucune deformation
+    camera.updateProjectionMatrix();
+    renderer.setSize(v.w, v.h, false);                        // le canvas reste plein ecran
+    computeLayout();                   // repositionne camera, rang des billets et rideaux
+  });
 }
+
+/* Distances oeil -> objet tenu en main : le billet et les trophees sont contemples
+   a la meme distance, donc a la meme echelle apparente. */
+const HERO_D  = 1.12;      // billet en main (m)
+const AWARD_D = 1.15;      // trophee en main (m)
+
+/* Demi-hauteur / demi-largeur visibles a la distance d (en metres) : sert a calibrer
+   tout ce qui est tenu " en main " (billet, trophees) sur la taille reelle de l'ecran,
+   pour que rien ne soit jamais coupe quelle que soit la fenetre. */
+const viewHalfH = d => Math.tan(camera.fov*Math.PI/360)*d;
+const viewHalfW = d => viewHalfH(d)*viewAspect();
 
 function desired(t, now){
   const h = t.home;
@@ -2378,13 +3171,12 @@ function desired(t, now){
     y += .06; z += .06; ry += .05; scale *= 1.05;
   }
   if(isHero){                                   // le billet vintage, en main, bien lisible au-dessus du comptoir
-    const d  = 1.12;                                            // distance oeil -> billet
-    const hh = Math.tan(camera.fov*Math.PI/360)*d;              // demi-hauteur visible au plan du billet
-    const hw = hh*(innerWidth/innerHeight);                     // demi-largeur visible
-    const wf = (innerWidth/innerHeight) < .85 ? .90 : .74;      // on tient le billet dans le cadre
+    const hh = viewHalfH(HERO_D);                               // demi-hauteur visible au plan du billet
+    const hw = viewHalfW(HERO_D);                               // demi-largeur visible
+    const wf = viewAspect() < .85 ? .90 : .74;                  // on tient le billet dans le cadre
     const fit = Math.min((2*hw*wf)/1.5, (2*hh*.52)/.9);         // jamais coupe, le plus grand possible
     x = 0; y = camBaseY - .14 + Math.sin(now*.6 + t.phase)*.02;
-    z = Math.max(.6, camera.position.z - d);
+    z = Math.max(.6, camera.position.z - HERO_D);
     rx = -.02 + t.dragXc; ry = t.dragYc + Math.sin(now*.4 + t.phase*1.7)*.03;
     scale = Math.min(fit, .58); op = 1;
   }
@@ -2396,84 +3188,160 @@ function desired(t, now){
 }
 
 /* ================== Boucle de rendu ================== */
+/* Une passe d'image = une petite fonction nommee, une seule responsabilite. startLoop()
+   ne fait que les enchainer dans l'ordre : camera, poussieres, rideaux, projecteur du
+   curseur, halo de la pile, trophees, billets — puis le rendu. */
+
+/* Parallaxe du pointeur + secousse (impact de tampon), appliquees a la camera. */
+function updateCamera(){
+  camera.position.x += (pointerNdc.x*.18 - camera.position.x)*.04;
+  camera.position.y += (camBaseY + pointerNdc.y*.06 - camera.position.y)*.06;
+  if(shake > 0){
+    camera.position.x += (Math.random()-.5)*shake*.09;
+    camera.position.y += (Math.random()-.5)*shake*.09;
+    shake *= .86;
+  }
+  camera.lookAt(0, camLookY, 0);
+}
+
+/* Poussieres : lente montee dans le faisceau du projecteur. */
+function updateDust(){
+  const pos = dustPts.geometry.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    pos.array[i*3+1] += .0015;
+    if(pos.array[i*3+1] > 6.5) pos.array[i*3+1] = -1.5;
+  }
+  pos.needsUpdate = true;
+}
+
+/* Rideaux ouverts <-> fermes (bascule par la cloche) + eclairage du guichet qui en decoule. */
+function updateCurtains(now){
+  const cT = boothsClosed ? 1 : 0;
+  curtainT += (cT - curtainT)*.055;
+  if(Math.abs(curtainT - cT) < .0015) curtainT = cT;
+  if(boothCurtains.length) layoutCurtains();
+  applyCurtainLighting();
+  // rideau ferme : la cloche " respire " (halo pulsant) -> on comprend qu'un clic l'ouvre
+  if(bellGlow && curtainT > .02) bellGlow.material.opacity *= .78 + .22*Math.sin(now*2.6);
+  if(bellHint) bellHint.classList.toggle("show", curtainT > .45);
+}
+
+/* Halo de la pile : tres visible au repos (attire l'oeil), discret lorsqu'un billet est en
+   main, eteint rideaux fermes (plus rien n'eclaire la pile). */
+function updatePileGlow(now){
+  const rest = heroIdx < 0;
+  const glowTarget = ((rest ? .78 : .14) + (rest ? Math.sin(now*1.6)*.12 : 0)) * (1 - curtainT);
+  pileGlow.material.opacity += (glowTarget - pileGlow.material.opacity)*.08;
+  pileGlow.scale.setScalar(1 + (rest ? Math.sin(now*1.6)*.05 + .05 : 0));
+}
+
+/* Trophees : posee au comptoir <-> en main (meme souplesse que le billet), source " studio "
+   qui les suit, et changement de statuette SEQUENTIEL (awardNext n'aboutit qu'une fois la
+   precedente entierement reposee). */
+function updateAwards(now){
+  let heldAward = null, heldT = 0;                      // trophee reellement en main (pour la source studio)
+  [boothCesar, boothOscar].forEach(o => {
+    if(!o) return;
+    const h = o.userData.home; if(!h) return;
+    const goal = (o === awardTaken) ? 1 : 0;
+    // montee / descente en douceur (le rangement presse un peu pendant un changement de statuette)
+    o.userData.at += (goal - o.userData.at)*(awardNext ? .20 : .12);
+    const t = o.userData.at < .0025 ? 0 : o.userData.at;
+    if(o === awardTaken && t > 0){ heldAward = o; heldT = t; }
+    if(t > 0 && camera){
+      const hh = viewHalfH(AWARD_D);                    // demi-hauteur visible a cette distance
+      const s = Math.min(hh*1.16/o.userData.hLocal, viewHalfW(AWARD_D)*.55/o.userData.wLocal);
+      o.position.set(0, camBaseY + .05 - o.userData.hLocal*s*.46 + Math.sin(now*.8)*.012*t,
+                     Math.max(.5, camera.position.z - AWARD_D));
+      // pose contemplative par defaut (leger penchant pour lire la plaque GRAVEE du socle
+      // + tournoiement lent), a laquelle s'ajoutent les angles donnes au pointeur — comme
+      // pour le billet en main
+      const u = o.userData;
+      u.dyc += (u.dy - u.dyc)*.22;                      // lissage, identique au billet
+      u.dxc += (u.dx - u.dxc)*.22;
+      o.rotation.set(-.18*t + u.dxc, Math.sin(now*.5)*.20*t + u.dyc, 0);
+      o.scale.setScalar(h.scale + (s - h.scale)*t);
+    } else {
+      o.position.set(h.x, h.y, h.z);
+      o.rotation.set(0, h.ry || 0, 0);
+      o.scale.setScalar(h.scale);
+    }
+  });
+  // source " studio " : elle ne s'allume que pour le trophee en main et le suit
+  // (position + cible recalculees a chaque frame ; cible = le corps, pas le socle)
+  if(awardSpot){
+    const want = heldAward ? 1.05*heldT : 0;
+    awardSpot.intensity += (want - awardSpot.intensity)*.10;
+    if(awardSpot.intensity < .01){ awardSpot.intensity = 0; awardSpot.visible = false; }
+    else{
+      awardSpot.visible = true;
+      heldAward.getWorldPosition(awardSpotV);
+      awardSpotV.y += heldAward.userData.hLocal*.42;        // on vise le torse / la compression
+      awardSpot.position.set(awardSpotV.x*.30, awardSpotV.y + .62, camera.position.z - .45);
+      awardSpot.target.position.copy(awardSpotV);
+      awardSpot.target.updateMatrixWorld();
+    }
+  }
+  if(awardNext && !awardTaken){
+    const rest = [boothCesar, boothOscar].every(o => !o || o.userData.at < .0025);
+    if(rest) takeAward(awardNext);              // le rangement est fini : on prend la suivante
+  }
+}
+
+/* Billets : lissage de la pose visee, apparition du tampon, du cadre laiton et de la punaise. */
+function updateTickets(now, dt, frame){
+  for(const t of tickets){
+    t.dragYc += (t.dragY - t.dragYc)*.22;
+    t.dragXc += (t.dragX - t.dragXc)*.22;
+    const isStack = !t.stamped && t.i !== heroIdx;   // billets poses en pile : pile fixe et plate
+    const swayGoal = (isStack || t===hovered) ? 0 : 1;
+    t.sway += (swayGoal - t.sway)*.05;
+    if(t.stampAnim > 0 && t.stampAnim < 1){
+      t.stampAnim = Math.min(1, t.stampAnim + dt*3.2);
+      if(t.stampAnim >= 1) t.stampDone = true; // tampon definitivement appose
+      drawFront(t, false);
+      drawBack(t, false);
+    }
+    const d = desired(t, now);
+    t.cx = lerp(t.cx,d.x,.16); t.cy = lerp(t.cy,d.y,.16); t.cz = lerp(t.cz,d.z,.16);
+    t.crx = lerp(t.crx,d.rx,.16); t.cry = lerp(t.cry,d.ry,.16);
+    t.cs = lerp(t.cs,d.scale,.16); t.cop = lerp(t.cop,d.op,.12);
+    t.group.position.set(t.cx,t.cy,t.cz);
+    t.group.rotation.set(t.crx,t.cry,0);
+    t.group.scale.setScalar(t.cs);
+    t.frontMat.opacity = t.backMat.opacity = t.edgeMat.opacity = t.cop;
+    // cadre laiton + punaise : on attend que le billet soit arrive au mur, puis on les
+    // fait apparaitre en douceur - ils ne peuvent plus etre masques ni clignoter.
+    if(t.stamped && !t.pinnedIn){
+      const gx = t.cx - t.home.x, gy = t.cy - t.home.y, gz = t.cz - t.home.z;
+      if(gx*gx + gy*gy + gz*gz < .03) t.pinnedIn = true;
+    }
+    const frameTarget = (t.stamped && t.pinnedIn) ? 1 : 0;
+    t.frameOp += (frameTarget - t.frameOp)*.14;
+    t.frameMat.opacity = t.pinMat.opacity = t.frameOp;
+    if(t.hasVideo && (t===hovered || t.i===heroIdx || (t.stampAnim>0 && t.stampAnim<1)) && (frame & 3) === 0){
+      drawFront(t, false); drawBack(t, false);
+    }
+  }
+}
+
 function startLoop(){
-  let frame = 0, prev = performance.now();
+  let frame = 0, prevMs = performance.now();
   (function loop(){
     requestAnimationFrame(loop);
-    const now = performance.now()/1000;
-    const dt = Math.min((now - prev/1000) || .016, .05); prev = performance.now();
+    const now = performance.now()/1000;                        // temps courant (s)
+    const dt  = Math.min((now - prevMs/1000) || .016, .05);    // pas de temps, borne (s)
+    prevMs = performance.now();
     frame++;
     if(document.hidden) return;
 
-    // parallaxe + secousse
-    camera.position.x += (pointerNdc.x*.18 - camera.position.x)*.04;
-    camera.position.y += (camBaseY + pointerNdc.y*.06 - camera.position.y)*.06;
-    if(shake > 0){
-      camera.position.x += (Math.random()-.5)*shake*.09;
-      camera.position.y += (Math.random()-.5)*shake*.09;
-      shake *= .86;
-    }
-    camera.lookAt(0,camLookY,0);
-
-    // poussieres
-    const pos = dustPts.geometry.attributes.position;
-    for(let i=0;i<pos.count;i++){
-      pos.array[i*3+1] += .0015;
-      if(pos.array[i*3+1] > 6.5) pos.array[i*3+1] = -1.5;
-    }
-    pos.needsUpdate = true;
-
-    // rideaux : ouverts <-> fermes (bascule par la cloche) + eclairage du guichet
-    const cT = boothsClosed ? 1 : 0;
-    curtainT += (cT - curtainT)*.055;
-    if(Math.abs(curtainT - cT) < .0015) curtainT = cT;
-    if(boothCurtains.length) layoutCurtains();
-    applyCurtainLighting();
-    // rideau ferme : la cloche " respire " (halo pulsant) -> on comprend qu'un clic l'ouvre
-    if(bellGlow && curtainT > .02) bellGlow.material.opacity *= .78 + .22*Math.sin(now*2.6);
-    if(bellHint) bellHint.classList.toggle("show", curtainT > .45);
-    placeCursorBeam(dt);                    // projecteur du curseur : faisceau qui eclaire le point vise
-
-    // halo de la pile : tres visible au repos (attire l'oeil), discret lorsqu'un billet est en main
-    // (eteint quand les rideaux sont fermes : plus rien n'eclaire la pile)
-    const glowTarget = ((heroIdx < 0 ? .78 : .14) + (heroIdx < 0 ? Math.sin(now*1.6)*.12 : 0)) * (1 - curtainT);
-    pileGlow.material.opacity += (glowTarget - pileGlow.material.opacity)*.08;
-    pileGlow.scale.setScalar(1 + (heroIdx < 0 ? Math.sin(now*1.6)*.05 + .05 : 0));
-
-    // tickets
-    for(const t of tickets){
-      t.dragYc += (t.dragY - t.dragYc)*.22;
-      t.dragXc += (t.dragX - t.dragXc)*.22;
-      const isStack = !t.stamped && t.i !== heroIdx;   // billets poses en pile : pile fixe et plate
-      const swayGoal = (isStack || t===focused || t===hovered) ? 0 : 1;
-      t.sway += (swayGoal - t.sway)*.05;
-      if(t.stampAnim > 0 && t.stampAnim < 1){
-        t.stampAnim = Math.min(1, t.stampAnim + dt*3.2);
-        if(t.stampAnim >= 1) t.stampDone = true; // tampon definitivement appose
-        drawFront(t, false);
-        drawBack(t, false);
-      }
-      const d = desired(t, now);
-      t.cx = lerp(t.cx,d.x,.16); t.cy = lerp(t.cy,d.y,.16); t.cz = lerp(t.cz,d.z,.16);
-      t.crx = lerp(t.crx,d.rx,.16); t.cry = lerp(t.cry,d.ry,.16);
-      t.cs = lerp(t.cs,d.scale,.16); t.cop = lerp(t.cop,d.op,.12);
-      t.group.position.set(t.cx,t.cy,t.cz);
-      t.group.rotation.set(t.crx,t.cry,0);
-      t.group.scale.setScalar(t.cs);
-      t.frontMat.opacity = t.backMat.opacity = t.edgeMat.opacity = t.cop;
-      // cadre laiton + punaise : on attend que le billet soit arrive au mur, puis on les
-      // fait apparaitre en douceur - ils ne peuvent plus etre masques ni clignoter.
-      if(t.stamped && !t.pinnedIn){
-        const gx = t.cx - t.home.x, gy = t.cy - t.home.y, gz = t.cz - t.home.z;
-        if(gx*gx + gy*gy + gz*gz < .03) t.pinnedIn = true;
-      }
-      const frameTarget = (t.stamped && t.pinnedIn) ? 1 : 0;
-      t.frameOp += (frameTarget - t.frameOp)*.14;
-      t.frameMat.opacity = t.pinMat.opacity = t.frameOp;
-      if(t.hasVideo && (t===hovered || t.i===heroIdx || (t.stampAnim>0 && t.stampAnim<1)) && (frame & 3) === 0){
-        drawFront(t, false); drawBack(t, false);
-      }
-    }
+    updateCamera();
+    updateDust();
+    updateCurtains(now);
+    placeCursorBeam(dt);       // projecteur du curseur : faisceau qui eclaire le point vise
+    updatePileGlow(now);
+    updateAwards(now);
+    updateTickets(now, dt, frame);
 
     renderer.render(scene, camera);
     if((frame & 31) === 0) updateClock();       // horloge de la cabine : heure locale (2 x/s)
@@ -2481,9 +3349,7 @@ function startLoop(){
   })();
 }
 
-let wdCount = 0;
 function ticketWatchdog(){
-  wdCount++;
   for(const t of tickets){
     try{
       if(t.frontCtx){
@@ -2515,17 +3381,20 @@ function openDetail(p){
   $("#dRoom").textContent = `${ROOMS[p.id]} * SCREENING`;
   const dIdx = ORDER.indexOf(p.id);
   if($("#dCount")) $("#dCount").textContent = `${dIdx + 1} / ${ORDER.length}`;
-  $("#dKicker").textContent = `${p.seance} - ${p.num} / 006 - ${p.duration}`;
+  $("#dKicker").textContent = [p.domain, p.year].filter(Boolean).join(" \u2022 ");
   $("#dTitle").textContent = p.title;
-  $("#dDomain").textContent = `${p.domain} - ${p.year}`;
   $("#dTagline").textContent = p.tagline;
   $("#dHeadline").textContent = p.headline;
+  /* AFFICHE EPUREE : uniquement des informations REELLES sur le projet.
+     Les metadonnees de cinema fictives (SHOWTIME, GENRE, RUNTIME, ticket n°) ne
+     sont PAS reprises ici - elles n'ont de sens que sur les TICKETS (decoration).
+     On garde : le domaine, l'annee, le role et les outils reellement utilises. */
   $("#dMeta").innerHTML = [
-    ["ROOM", ROOMS[p.id]],
-    ["GENRE", p.genre],
-    ["RUNTIME", p.duration],
+    ["DOMAIN", p.domain],
     ["YEAR", p.year],
-  ].map(m => `<div><label>${m[0]}</label><strong>${m[1]}</strong></div>`).join("");
+    ["ROLE", p.role],
+    ["TOOLS", (p.tools || []).join(" \u00b7 ")],
+  ].filter(m => m[1]).map(m => `<div><dt>${m[0]}</dt><dd><strong>${m[1]}</strong></dd></div>`).join("");
   // medias dedupliques
   const seen = [], figs = [];
   [p.front, p.back].forEach(m => { if(!seen.includes(m.src)){ seen.push(m.src); figs.push(m); } });
@@ -2540,12 +3409,17 @@ function openDetail(p){
   detail.classList.add("open"); detail.setAttribute("aria-hidden","false");
   document.body.style.overflow = "hidden";
   if(detailScroll) detailScroll.scrollTop = 0;
-  snd.open();
+  // le focus entre dans la fiche : la touche Echap et le clavier fonctionnent tout de suite
+  const back = detail.querySelector("[data-close]");
+  if(back) back.focus();
+  updateProjectListActive();
+  /* sound removed */
 }
 function closeDetail(){
   detailOpen = false;
   detail.classList.remove("open"); detail.setAttribute("aria-hidden","true");
   document.body.style.overflow = "";
+  updateProjectListActive();
 }
 function stepDetail(dir){
   if(!detailOpen) return;
@@ -2578,7 +3452,7 @@ function openPanelById(id){
   document.body.classList.add("panel-open");
   $$(".reveal", el).forEach(r => r.classList.add("in"));   // contenu deja revele
   if(id === "about") el.classList.add("skills-on");
-  snd.open();
+  /* sound removed */
 }
 function closePanel(){
   if(!openPanel) return;
@@ -2597,6 +3471,20 @@ function buildNoWebgl(){
     b.addEventListener("click", () => openDetail(PROJECTS.find(p => p.id === b.dataset.fiche))));
 }
 
+/* ================== Menu mobile : ouverture / fermeture ================== */
+/* Le menu est un <nav> plein ecran : on tient a jour son etat pour les lecteurs d'ecran
+   (aria-hidden) et celui du bouton MENU (aria-expanded), et on rend le focus au bouton
+   quand on ferme au clavier. */
+function setMobileMenu(open, focusBack){
+  const m = $("#mobileMenu"), b = $("#menuBtn");
+  if(!m) return;
+  m.classList.toggle("open", open);
+  m.setAttribute("aria-hidden", String(!open));
+  if(b) b.setAttribute("aria-expanded", String(open));
+  if(open){ const first = m.querySelector("a,button"); if(first) first.focus(); }
+  else if(focusBack && b) b.focus();
+}
+
 /* ================== HUD classique (grain, timecode, reveal...) ================== */
 function initHud(){
   initPanels();
@@ -2607,11 +3495,19 @@ function initHud(){
     const te = $("#ticketEmail"); if(te) te.textContent = CONFIG.email;
   }
 
-  /* grain */
+  /* grain : petit bitmap etire par le CSS (jamais plus d'un demi-ecran, et plafonne en
+     pixels pour que le tirage aleatoire reste bon marche sur un grand ecran). */
   const cg = grain.getContext("2d");
-  const sizeG = () => { grain.width = innerWidth/2; grain.height = innerHeight/2; };
+  const GRAIN_PX = 460*260;                      // budget de pixels de bruit (~120 k)
+  const sizeG = () => {
+    const v = viewSize();                        // taille reelle du canvas (et non innerWidth)
+    const k = Math.min(.5, Math.sqrt(GRAIN_PX/(v.w*v.h)));
+    grain.width  = Math.max(1, Math.round(v.w*k));
+    grain.height = Math.max(1, Math.round(v.h*k));
+  };
   sizeG(); addEventListener("resize", sizeG);
   setInterval(() => {
+    if(document.hidden) return;                  // onglet en arriere-plan : aucun calcul
     const d = cg.createImageData(grain.width, grain.height), b = d.data;
     for(let i=0;i<b.length;i+=4){ const v=Math.random()*255|0; b[i]=b[i+1]=b[i+2]=v; b[i+3]=30; }
     cg.putImageData(d,0,0);
@@ -2620,6 +3516,7 @@ function initHud(){
   /* timecode */
   const tc = $("#timecode"); let f = 0;
   setInterval(() => {
+    if(document.hidden) return;
     f = (f+1)%24;
     const t = performance.now()/1000|0;
     const hh=String(t/3600|0).padStart(2,"0"), mm=String((t/60|0)%60).padStart(2,"0"),
@@ -2670,14 +3567,16 @@ function initHud(){
 
   /* bouton son */
   const sb = $("#soundBtn");
-  const sync = () => { sb.setAttribute("aria-pressed", String(snd.on())); sb.textContent = snd.on() ? "SOUND ON" : "SOUND OFF"; };
-  sb.addEventListener("click", () => { snd.toggle(); sync(); unlockMedia(); });
-  sync();
+  if(sb){ sb.style.display = "none"; }
 
   /* menu mobile */
-  $("#menuBtn").addEventListener("click", () => $("#mobileMenu").classList.add("open"));
-  $("#menuClose").addEventListener("click", () => $("#mobileMenu").classList.remove("open"));
-  $$("#mobileMenu a").forEach(a => a.addEventListener("click", () => $("#mobileMenu").classList.remove("open")));
+  $("#menuBtn").addEventListener("click", () => setMobileMenu(true));
+  $("#menuClose").addEventListener("click", () => setMobileMenu(false, true));
+  $$("#mobileMenu a").forEach(a => a.addEventListener("click", () => setMobileMenu(false)));
+
+  /* l'invite sous la cloche est un vrai bouton : elle sonne la cloche, ce qui donne
+     aussi un moyen d'ouvrir le guichet au clavier */
+  if(bellHint) bellHint.addEventListener("click", () => { if(boothsClosed) toggleCurtains(); });
 
   /* liens internes : #top -> guichet, sections -> panneaux plein ecran */
   $$('a[href^="#"]').forEach(a => a.addEventListener("click", e => {
@@ -2686,7 +3585,7 @@ function initHud(){
     const tgt = document.getElementById(href.slice(1));
     if(!tgt) return;
     e.preventDefault();
-    $("#mobileMenu").classList.remove("open");
+    setMobileMenu(false);
     if(tgt.classList.contains("panel")) openPanelById(tgt.id);
     else closePanel();                                   // #top -> retour au guichet
   }));
@@ -2713,20 +3612,43 @@ function initHud(){
 /* ================== Boot ================== */
 async function fontsReady(){
   try{
-    await Promise.all([
-      document.fonts.load("90px Anton"),
-      document.fonts.load("600 22px Archivo"),
-      document.fonts.load("italic 26px \"Playfair Display\""),
-      document.fonts.load("700 88px \"Playfair Display\""),
+    await Promise.race([
+      Promise.all([
+        document.fonts.load("90px Anton"),
+        document.fonts.load("600 22px Archivo"),
+        document.fonts.load("italic 26px \"Playfair Display\""),
+        document.fonts.load("700 88px \"Playfair Display\""),
+      ]),
+      new Promise(r => setTimeout(r, 6000)),      // garde-fou : CDN bloque, on n'attend pas indefiniment
     ]);
   }catch(e){}
+  fontsLoaded = true; updateLoaderProgress();
 }
 async function boot(){
-  await Promise.all([preloadAll(), fontsReady()]);
+  /* On lance en parallele : prechargement des medias, polices, et (au plus tot) la
+     construction de la scene, pour que le compte a rebours ait le moins a attendre. */
+  const assets = preloadAll();
+  const fonts  = fontsReady();
+  await Promise.all([assets, fonts]);
   if(buildStarted) return; buildStarted = true;
-  initHud();
-  buildNoWebgl();
-  buildScene();
+  try{
+    initHud();
+    buildProjectList();
+    buildNoWebgl();
+    buildScene();
+  }catch(e){
+    // une etape a echoue (3D, HUD...) : on n'expose pas une scene inutilisable,
+    console.error("[box office] boot step failed", e);
+    if(noWebgl) noWebgl.hidden = false;
+  }finally{
+    /* QUOI QU'IL ARRIVE, la barre inferieure est visible : c'est ELLE qui porte la
+       LISTE des projets (et l'invite " SCROLL TO CHOOSE A TICKET "). Si la scene 3D
+       a echoue ou si WebGL est indisponible, buildScene() s'arrete avant d'afficher
+       la barre : sans ce filet, les projets et le STAMP disparaissaient. */
+    syncHandUI();
+    updateProjectListActive();
+    sceneBuilt = true; maybeFinish();              // scene prete (ou repli) -> le loader se libere
+  }
 }
 document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", boot) : boot();
 console.log("%c LL PICTURES - THE BOX OFFICE %c 6 tickets on the counter. Hover, click, spin, stamp. ", "background:#e03131;color:#fff", "background:#111;color:#efe9dc");

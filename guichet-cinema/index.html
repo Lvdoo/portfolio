@@ -4,29 +4,30 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#0b0b0c" />
 <title>LUDOVIC LI - The Box Office - Cinema Portfolio</title>
 <meta name="description" content="Interactive 3D cinema portfolio by Ludovic LI, Creative Developer. The box office: six tickets on the counter - pick one up, spin it, stamp it to reveal each film-project in 3D." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
 <!-- bump ?v= whenever styles.css / app.js changes, to force a reload (Chrome cache over file://) -->
-<link rel="stylesheet" href="styles.css?v=60" />
+<link rel="stylesheet" href="styles.css?v=76" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'>G</text></svg>" />
 </head>
-<body data-loading="true">
+<body data-loading="true" aria-busy="true">
 
 <!-- ========== BOOT / LOADER ========== -->
 <div id="loader" aria-hidden="true">
   <div class="loader-frame">
     <div class="loader-top"><span>BOX OFFICE CLOSED</span><span>OPENING - 16 MM</span></div>
-    <div class="loader-count" id="loaderCount">3</div>
-    <div class="loader-cross"></div>
-    <div class="loader-bottom"><span>LUDOVIC LI</span><span id="loaderPct">0%</span></div>
+    <div class="loader-count" id="loaderCount" aria-live="polite">3</div>
+    <div class="loader-cross" aria-hidden="true"></div>
+    <div class="loader-bottom"><span>LUDOVIC LI</span><span>16 MM</span></div>
   </div>
 </div>
 
 <!-- ========== 3D SCENE (Three.js) ========== -->
-<canvas id="stage" aria-label="Interactive cinema box office"></canvas>
+<canvas id="stage" role="img" aria-label="Cinema box office: six tickets on the counter, a bell and two awards to look at"></canvas>
 
 <div id="noWebgl" hidden>
   <h2>Your browser can't render 3D.</h2>
@@ -52,28 +53,29 @@
     <span id="timecode">00:00:00:00</span>
     <span class="tc-label">REC - 24 FPS</span>
   </div>
-  <nav class="main-nav">
+  <nav class="main-nav" aria-label="Main">
     <a href="#top" data-hover="GO">BOX OFFICE</a>
     <a href="#about" data-hover="SEE">ABOUT</a>
     <a href="#contact" class="ticket-mini" data-hover="GO">CONTACT TICKET</a>
     <button id="soundBtn" class="sound-btn" aria-pressed="true" aria-label="Mute sound">SOUND ON</button>
-    <button id="menuBtn" aria-label="Menu">MENU</button>
+    <button id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">MENU</button>
   </nav>
 </header>
 
 <!-- mobile menu -->
-<div id="mobileMenu" aria-hidden="true">
-  <button id="menuClose" aria-label="Close">X</button>
+<nav id="mobileMenu" aria-label="Sections" aria-hidden="true">
+  <button id="menuClose" aria-label="Close menu">X</button>
   <a href="#top">THE BOX OFFICE</a>
   <a href="#about">ABOUT</a>
   <a href="#contact">CONTACT</a>
   <p>CREATIVE DEVELOPER - CODE x REALTIME x CINEMA</p>
-</div>
+</nav>
 
 <main id="top">
 
   <!-- ========== HERO - THE BOX OFFICE ========== -->
   <section class="hero" id="hero">
+    <h1 class="sr-only">Ludovic LI - The Box Office - creative developer portfolio</h1>
     <div class="hero-top">
       <p class="kicker reveal"><span class="kicker-dot"></span> LUDOVIC CINEMA - BOX OFFICE No.1 - SEASON 2025/2026</p>
     </div>
@@ -143,10 +145,10 @@
         <p class="ticket-brand">LL PICTURES - TILL No.1</p>
         <h3>ADMIT ONE</h3>
         <p class="ticket-num">No. 004 - ROW CODE - SEAT CINE</p>
-        <div class="ticket-meta">
-          <div><label>WRITE TO</label><strong id="ticketEmail">ludovicli27@outlook.fr</strong></div>
-          <div><label>GITHUB</label><strong><a href="https://github.com/Lvdoo" target="_blank" rel="noopener">github.com/Lvdoo</a></strong></div>
-        </div>
+        <dl class="ticket-meta">
+          <div><dt>WRITE TO</dt><dd><strong id="ticketEmail">ludovicli27@outlook.fr</strong></dd></div>
+          <div><dt>GITHUB</dt><dd><strong><a href="https://github.com/Lvdoo" target="_blank" rel="noopener">github.com/Lvdoo</a></strong></dd></div>
+        </dl>
       </div>
       <div class="ticket-perfo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div class="ticket-right">
@@ -167,19 +169,28 @@
   </section>
 </main>
 
-<!-- ========== STAMP BAR (current ticket) ========== -->
+<!-- ========== BOTTOM BLACK BAR : the project list ONLY ========== -->
 <div id="ticketBar" aria-hidden="true">
-  <div class="stamp-meta">
-    <span class="stamp-title" id="stampTitle">TERUBOT</span>
-    <span class="stamp-count" id="stampCounter">STAMPED <b>0</b>/6</span>
-  </div>
-  <button id="stampBtn" class="btn btn--stamp" data-hover="STAMP">* STAMP</button>
+  <div id="projectList" class="project-list" aria-label="Project list"></div>
 </div>
 
-<!-- ========== HINT: RING THE BELL (booth closed) ========== -->
-<div id="bellHint" aria-hidden="true">
-  <span class="bh-arrow">&#9660;</span>
+<!-- ========== HINT : ABOVE the black bar, centred (state label) ========== -->
+<!-- " SCROLL TO CHOOSE A TICKET " at rest, the in-hand project's name once a
+     ticket is picked up. Sits ABOVE the bottom black bar, never inside it. -->
+<div class="stamp-meta" id="stampMeta">
+  <span class="stamp-title" id="stampTitle">SCROLL TO CHOOSE A TICKET</span>
 </div>
+
+<!-- ========== STAMP BUTTON : ABOVE the black bar, pinned right ========== -->
+<!-- Hidden until a ticket is actually IN HAND (body.hand), then it appears. -->
+<button id="stampBtn" class="btn btn--stamp" data-hover="STAMP">* STAMP</button>
+
+<!-- ========== HINT: RING THE BELL (booth closed) ========== -->
+<!-- Vrai bouton (pas un simple repere) : il sonne la cloche, ce qui donne aussi un
+     moyen d'ouvrir le guichet au clavier et une cible tactile plus large. -->
+<button type="button" id="bellHint" aria-label="Ring the bell to open the box office">
+  <span class="bh-arrow" aria-hidden="true">&#9660;</span>
+</button>
 
 <!-- ========== FILM CARD (THE FILM) ========== -->
 <div id="detail" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Film card">
@@ -197,12 +208,11 @@
       <header class="detail-poster">
         <p class="detail-kicker" id="dKicker"></p>
         <h3 id="dTitle"></h3>
-        <p class="detail-domain" id="dDomain"></p>
         <p class="detail-tagline" id="dTagline"></p>
       </header>
       <div class="detail-media" id="dMedia"></div>
       <p class="detail-headline" id="dHeadline"></p>
-      <div class="detail-meta" id="dMeta"></div>
+      <dl class="detail-meta" id="dMeta"></dl>
       <div class="detail-body" id="dBody"></div>
     </div>
   </article>
@@ -212,7 +222,7 @@
 
 <!-- Three.js (UMD build: works even on double-click, no server) -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="app.js?v=64"></script>
+<script src="app.js?v=88"></script>
 </body>
 </html>
 
