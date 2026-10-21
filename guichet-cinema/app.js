@@ -160,6 +160,8 @@ const stampTitle = $("#stampTitle"), stampBtn = $("#stampBtn"), stampMeta = $("#
 const bellHint = $("#bellHint");
 const detail = $("#detail"), detailSheet = $("#detailSheet"), detailScroll = $("#detailScroll"), noWebgl = $("#noWebgl");
 const projectListEl = $("#projectList");
+const cineBarBottom = $(".cine-bar--bottom");        // la bande noire du bas (hauteur de reference)
+const cineBarTop = $(".cine-bar--top");              // la bande noire du haut (idem)
 
 /* ================== Taille REELLE de la surface de rendu ==================
    Le canvas est en position:fixed;inset:0 : sa boite CSS EST le viewport de mise en page.
@@ -851,6 +853,8 @@ let boothBell = null, bellHit = null, bellMatRef = null, bellLight = null, bellG
 let sceneAmbient = null, sceneDir = null, sceneRim = null, projBeam = null;
 let boothLamp = null, boothWarm = null, boothLampLight = null;
 const BELL_NDC = -.58;                                        // position ecran de la cloche (world x calcule par placeBell)
+const BELL_TOP_Y = .12;                                       // hauteur du SOMMET de la cloche (dome .10 + bouton .082+.028)
+const BELL_HINT_GAP = 24;                                     // px : espace entre la pointe de la fleche et le sommet de la cloche
 const bellNdc = new THREE.Vector3();                          // scratch : position ecran de la cloche (invite " sonnez " )
 /* projecteur du curseur : un faisceau doux + une tache de lumiere qui eclairent, en
    direct, l'endroit vise par le pointeur (billet compris). Eteint quand le guichet est ferme. */
@@ -2106,6 +2110,7 @@ function buildScene(){
   ticketBar.classList.add("show");
   ticketBar.setAttribute("aria-hidden","false");
   document.body.classList.remove("hand");
+  layoutProjectList();                           // la liste des projets : barre ou devanture ? (on mesure)
   bindWorld();
   startLoop();
 }
@@ -2149,6 +2154,8 @@ function showHero(i, instant, dir){
   document.body.classList.add("ticket-open");
   syncHandUI();
   updateProjectListActive();
+  measureHeroZone();                   // le billet en main : la zone libre qui l'accueille
+  layoutProjectList();                 // le billet en main occupe le centre : la plaque descend sous lui
   if(!instant) { /* sound removed */ }
 }
 
@@ -2163,6 +2170,8 @@ function toPile(instant){
   document.body.classList.remove("ticket-open");
   syncHandUI();
   updateProjectListActive();
+  measureHeroZone();                   // plus de billet en main : la zone libre change
+  layoutProjectList();                 // plus de billet en main : la plaque peut remonter sur le bois
   if(!instant) { /* sound removed */ }
 }
 
@@ -2330,14 +2339,23 @@ function placeBell(){
   const camZ = Math.max(1, camera.position.z);
   const depth = Math.max(.5, camZ - boothBell.position.z);
   boothBell.position.x = BELL_NDC * depth * tanX;
-  if(bellHint){
-    camera.updateMatrixWorld();
-    bellNdc.set(boothBell.position.x, boothBell.position.y, boothBell.position.z).project(camera);
-    const L = Math.min(94, Math.max(6, (bellNdc.x + 1) * 50));
-    bellHint.style.left = L + "%";
-    bellHint.style.bottom = "calc(var(--bar) + 40px + var(--sab))";
-    bellHint.style.top = "auto";
-  }
+  placeBellHint();
+}
+/* Invite " sonnez la cloche " : la fleche est posee AU-DESSUS du SOMMET de la cloche.
+   On projette ce sommet en NDC, puis on repasse en PIXELS (la boite reelle du canvas) :
+   la fleche suit donc la cloche sur TOUS les formats (desktop large, telephone en
+   portrait) et suit meme sa parallaxe, car on la replace a chaque image.
+   Le deplacement se fait en transform : aucun recalcul de mise en page. */
+let bellHintTf = "";                                           // dernier transform ecrit (evite les ecritures inutiles)
+function placeBellHint(){
+  if(!bellHint || !camera || !boothBell) return;
+  camera.updateMatrixWorld();
+  bellNdc.set(boothBell.position.x, BELL_TOP_Y, boothBell.position.z).project(camera);
+  const v = viewSize();
+  const x = (bellNdc.x + 1) * .5 * v.w;                          // px : l'aplomb de la cloche
+  const y = (1 - bellNdc.y) * .5 * v.h;                          // px : le sommet de la cloche
+  const tf = "translate3d(" + x.toFixed(1) + "px," + (y - BELL_HINT_GAP).toFixed(1) + "px,0) translate(-50%,-100%)";
+  if(tf !== bellHintTf){ bellHint.style.transform = tf; bellHintTf = tf; }
 }
 function pickBell(px,py){
   if(!bellHit || !camera) return false;
@@ -2349,6 +2367,7 @@ function pickBell(px,py){
 function toggleCurtains(){
   boothsClosed = !boothsClosed;
   syncBoothState();                                // l'invite suit l'etat du rideau
+  measureHeroZone();                               // l'invite disparait : la zone libre change
   if(boothsClosed){
     if(detailOpen) closeDetail();
     if(heroIdx >= 0) toPile(false);
@@ -2643,6 +2662,190 @@ window.__v7 = () => ({
   detail: detailOpen,
   closed: boothsClosed, curtainT: +curtainT.toFixed(3),
 });
+
+/* CADRAGE du billet en main : sa place reelle a l'ecran (boite) et la zone libre
+   (ce que l'interface n'occupe pas). Sert a verifier le recentrage sur chaque
+   format : la boite doit etre CENTREE dans la zone, jamais rognee. */
+window.__hero = () => {
+  const v = viewSize(), hr = heroRest(), zone = heroZone || measureHeroZone();
+  const pts = [[-.75,.45],[.75,.45],[.75,-.45],[-.75,-.45]].map(p => {
+    const s = screenAtWorld(hr.x + p[0]*hr.scale, hr.y + p[1]*hr.scale, hr.z);
+    return {x:Math.round(s.x), y:Math.round(s.y)};
+  });
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  return {
+    view:  {w:v.w, h:v.h},
+    zone:  {top:Math.round(zone.top), bottom:Math.round(zone.bottom), cx:Math.round(zone.cx),
+            cy:Math.round(zone.cy), w:Math.round(zone.w), h:Math.round(zone.h)},
+    gain:  +heroCenterGain(viewAspect(), zone.h).toFixed(3),
+    rest:  {x:+hr.x.toFixed(3), y:+hr.y.toFixed(3), z:+hr.z.toFixed(3),
+            scale:+hr.scale.toFixed(3), rise:+hr.rise.toFixed(3)},
+    box:   {x0, x1, y0, y1},
+    center:{x:Math.round((x0+x1)/2), y:Math.round((y0+y1)/2)},
+    /* le cadrage d'origine (avant recentrage), pour comparer */
+    base:  (() => { const b = screenAtWorld(0, camBaseY - .14 + hr.rise, hr.z);
+                    return {x:Math.round(b.x), y:Math.round(b.y)}; })()
+  };
+};
+
+/* ================== LISTE DES PROJETS : LA OU ELLE VIT ==================
+   Les six titres des films vivent dans la barre NOIRE du bas. Mais sur un
+   telephone etroit ils n'y tiennent pas sur UNE ligne : ils sont coupes (il
+   faut les faire defiler, et on les rate). On ne tranche pas au doigt mouille :
+   on MESURE.
+     1. largeur reellement necessaire (somme des titres + espaces) contre largeur
+        reellement disponible dans la barre -> si tout tient sur une ligne, on ne
+        bouge a rien (bureau, tablette, telephone en paysage) ;
+     2. sinon on regarde la DEVANTURE du guichet : la face avant du comptoir en
+        bois, projetee a l'ecran comme la fleche de la cloche. Si elle offre
+        assez de place, la liste s'y pose, en plusieurs rangees si besoin ;
+     3. sinon (devanture hors cadre) on reste dans la barre, qui defile
+        horizontalement : le repli, jamais une liste perdue.
+   La decision est donc prise A LA MESURE, jamais par une media query. */
+const FACADE_Z = 1.95;          // face avant du comptoir (plan de la devanture)
+const FACADE_TOP_Y = -.22;      // sous le rebord avant du plan de travail
+const FACADE_BOT_Y = -2.90;     // bas de la devanture, juste au-dessus de la plinthe
+const LF_GAP = 14;              // px : marge entre la plaque et ce qu'elle touche
+const LF_MIN_H = 64;            // px : hauteur minimale du panneau sur la devanture
+const facadeV = new THREE.Vector3();
+let listFacade = false;         // la liste est-elle posee sur la devanture ?
+let listRect = null;            // dernier rectangle applique (px ecran)
+let listBarH = 56;              // px : hauteur de la bande noire du bas
+let listContentH = 0;           // px : hauteur reelle des titres (0 = non mesure)
+
+/* Les encoches, le Dynamic Island, la barre gestuelle : on les MESURE (sonde
+   invisible qui herite des env(safe-area-inset-*)) plutot que de les deviner. */
+let safeProbe = null;
+function safeInsets(){
+  if(!safeProbe){
+    safeProbe = document.createElement("div");
+    safeProbe.setAttribute("aria-hidden", "true");
+    safeProbe.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;"+
+      "padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);"+
+      "padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)";
+    document.body.appendChild(safeProbe);
+  }
+  const cs = getComputedStyle(safeProbe);
+  return {t:parseFloat(cs.paddingTop) || 0, r:parseFloat(cs.paddingRight) || 0,
+          b:parseFloat(cs.paddingBottom) || 0, l:parseFloat(cs.paddingLeft) || 0};
+}
+
+/* Largeur REELLEMENT necessaire pour les six titres sur UNE seule ligne. */
+function listNeededWidth(){
+  const items = projectListEl ? projectListEl.querySelectorAll(".project-list-item") : [];
+  if(!items.length) return 0;
+  const gap = parseFloat(getComputedStyle(projectListEl).columnGap) || 0;
+  let w = 0;
+  items.forEach((it, i) => { w += it.offsetWidth + (i ? gap : 0); });
+  return w;
+}
+
+/* Un point du monde -> sa hauteur en pixels ecran (projection par la camera). */
+function worldToScreenY(x, y, z){
+  const v = viewSize();
+  facadeV.set(x, y, z).project(camera);
+  return (1 - facadeV.y)*.5*v.h;
+}
+
+/* La devanture a l'ecran : le rebord avant du comptoir (en haut) et le bas du bois
+   (en bas). Entre les deux, il n'y a QUE du bois : c'est la que la liste se pose. */
+function facadeBand(){
+  return {top: worldToScreenY(0, FACADE_TOP_Y, FACADE_Z),
+          bot:  worldToScreenY(0, FACADE_BOT_Y, FACADE_Z)};
+}
+
+/* Bord BAS du billet en main, en pixels ecran (position de REPOS : la plaque ne doit
+   pas trembler avec le billet). 0 si aucun billet en main. */
+function heroBottomScreenY(){
+  if(heroIdx < 0 || !tickets[heroIdx]) return 0;
+  const t = tickets[heroIdx];
+  if(t.stamped) return 0;
+  const hr = heroRest();
+  return worldToScreenY(hr.x, hr.y - .45*hr.scale, hr.z);
+}
+
+/* ===== La liste : DECISION (mesure) =====
+   Renvoie le rectangle a poser sur la devanture, ou null si la liste reste dans
+   la barre. Appele au redimensionnement, au demarrage, et quand le billet en main
+   change (c'est lui qui borne le haut de la plaque). */
+function layoutProjectList(){
+  if(!projectListEl || !ticketBar || !camera) return;
+  camera.updateMatrixWorld();
+  const v = viewSize();
+  const ins = safeInsets();
+  const padL = Math.max(18, ins.l), padR = Math.max(18, ins.r);
+  listBarH = cineBarBottom ? cineBarBottom.getBoundingClientRect().height : 56;
+  /* 1. la liste tient-elle sur UNE ligne dans la barre ? (la largeur de la barre
+        vaut la largeur de l'ecran moins les marges laterales ; on la CALCULE) */
+  const avail = v.w - padL - padR;
+  if(listNeededWidth() <= avail + 2){ setListOnFacade(false); return; }
+  /* 2. elle ne tient pas : la devanture peut-elle l'accueillir ? */
+  const band = facadeBand();
+  const barTop = v.h - listBarH;                              // le haut de la bande noire du bas
+  const heroBottom = heroBottomScreenY();                     // le billet en main ne doit pas etre masque
+  let top = band.top + LF_GAP;
+  if(heroBottom > 0) top = Math.max(top, heroBottom + LF_GAP);
+  const bottom = Math.min(band.bot - LF_GAP, barTop - LF_GAP);
+  const availH = bottom - top;
+  if(availH < LF_MIN_H){ setListOnFacade(false); return; }    // devanture hors cadre : on garde la barre
+  const rect = {left: padL, top: Math.round(top), w: Math.round(v.w - padL - padR), h: Math.round(availH)};
+  setListOnFacade(true, rect);
+  /* 3. la plaque se resserre sur les titres : elle cloutee le bois, elle ne le recouvre
+        pas. Et si meme en rangees les titres debordent, on repasse en defilement
+        horizontal : on ne coupe jamais un titre, on ne perd jamais la liste. */
+  const contentH = projectListEl.scrollHeight;
+  document.body.classList.toggle("list-facade-scroll", contentH > availH + 2);
+  listContentH = Math.round(projectListEl.scrollHeight);      // mesure reelle, apres le basculement
+  if(listContentH > availH) listContentH = Math.round(availH);
+  setListOnFacade(true, {left: rect.left, top: rect.top, w: rect.w, h: listContentH});
+}
+
+/* ===== La liste : POSE (projection) =====
+   On applique (ou on retire) la plaque sur le bois du guichet. */
+function setListOnFacade(on, rect){
+  if(on){
+    if(listFacade && listRect && rect && rect.left === listRect.left && rect.top === listRect.top &&
+       rect.w === listRect.w && rect.h === listRect.h) return;      // rien n'a bouge : on ne touche pas au DOM
+    listFacade = true;
+    document.body.classList.add("list-facade");
+    listRect = rect;
+    ticketBar.style.left = rect.left+"px";
+    ticketBar.style.top = rect.top+"px";
+    ticketBar.style.width = rect.w+"px";
+    ticketBar.style.height = rect.h+"px";
+  }else{
+    if(!listFacade) return;
+    listFacade = false;
+    document.body.classList.remove("list-facade", "list-facade-scroll");
+    listRect = null;
+    listContentH = 0;
+    ticketBar.style.left = ticketBar.style.top = ticketBar.style.width = ticketBar.style.height = "";
+  }
+}
+
+/* ===== La liste : SUIVI (chaque image) =====
+   La plaque reste collee au bois : la camera bouge legerement (parallaxe), le bois
+   bouge avec elle. On ne recalcule que la VERTICALITE, sans lecture de mise en
+   page : le cout par image reste nul. */
+function placeProjectList(){
+  if(!listFacade || !listRect || !camera) return;
+  camera.updateMatrixWorld();
+  const v = viewSize();
+  const band = facadeBand();
+  const barTop = v.h - listBarH;
+  const heroBottom = heroBottomScreenY();
+  let top = band.top + LF_GAP;
+  if(heroBottom > 0) top = Math.max(top, heroBottom + LF_GAP);
+  const bottom = Math.min(band.bot - LF_GAP, barTop - LF_GAP);
+  const availH = Math.max(0, bottom - top);
+  const t = Math.round(top);
+  const h = Math.round(listContentH > 0 ? Math.min(availH, listContentH) : availH);
+  if(t === listRect.top && h === listRect.h) return;           // rien n'a bouge
+  listRect.top = t; listRect.h = h;
+  ticketBar.style.top = t+"px";
+  ticketBar.style.height = h+"px";
+}
 
 /* ================== Disposition : cadrage de la camera ==================
    Le cadrage repond a DEUX contraintes, dans cet ordre :
@@ -3144,6 +3347,8 @@ function onResize(){
     camera.updateProjectionMatrix();
     renderer.setSize(v.w, v.h, false);                        // le canvas reste plein ecran
     computeLayout();                   // repositionne camera, rang des billets et rideaux
+    measureHeroZone();                 // la zone libre a change de taille : le billet en main se recadre
+    layoutProjectList();               // la liste des projets : on re-mesure (elle a change de place ?)
   });
 }
 
@@ -3158,6 +3363,108 @@ const AWARD_D = 1.15;      // trophee en main (m)
 const viewHalfH = d => Math.tan(camera.fov*Math.PI/360)*d;
 const viewHalfW = d => viewHalfH(d)*viewAspect();
 
+/* ================== LE BILLET EN MAIN : LA ZONE UTILE ==================
+   Un billet en main doit apparaitre CENTRE dans la zone reellement LIBRE de
+   l'ecran : l'ecran MOINS ce que l'interface occupe (barres noires, encoches,
+   invite d'etat, bouton STAMP). Et il doit y TENIR entierement.
+   On ne touche PAS a la camera : la scene garde son cadrage, ses proportions
+   et sa perspective. On CALCULE la position monde du billet pour qu'il tombe
+   exactement la ou il doit etre vu (meme methode que la fleche de la cloche :
+   on projette, on mesure, on repositionne).
+   Sur un GRAND ecran, le cadrage d'origine est deja le bon (le billet reste
+   au-dessus du comptoir, comme un billet tenu a la main) : on n'y touche pas.
+   La rampe de recentrage est DOUCE : aucun format ne " saute ". */
+
+/* La zone libre, en pixels ecran. MESUREE, jamais devinee : on interroge les
+   elements de l'interface (barres noires, invite d'etat) et les encoches. */
+let heroZone = null;
+function measureHeroZone(){
+  const v = viewSize();
+  const ins = safeInsets();
+  const topBar = cineBarTop ? cineBarTop.getBoundingClientRect().height : 0;
+  const botBar = cineBarBottom ? cineBarBottom.getBoundingClientRect().height : 0;
+  let top    = topBar + ins.t;                                // barre du haut + encoche
+  let bottom = v.h - botBar - ins.b;                           // barre du bas + barre gestuelle
+  if(stampMeta && getComputedStyle(stampMeta).visibility !== "hidden"){
+    const r = stampMeta.getBoundingClientRect();
+    if(r.height) bottom = Math.min(bottom, r.top - 6);         // l'invite d'etat, juste au-dessus
+  }
+  const left = Math.max(18, ins.l), right = v.w - Math.max(18, ins.r);
+  if(bottom - top < 140) top = Math.max(0, bottom - 140);      // filet de securite
+  heroZone = {top, bottom, left, right,
+              cx:(left+right)/2, cy:(top+bottom)/2,
+              w:Math.max(1,right-left), h:Math.max(1,bottom-top)};
+  return heroZone;
+}
+
+/* Un point ECRAN (px) -> la position MONDE qui s'y projette, sur le plan z du
+   billet. Exact : on passe par le repere de la camera, puis on intersecte le
+   rayon avec le plan du billet. La perspective est donc respectee au pixel pres. */
+const heroRay = new THREE.Vector3();
+function worldAtScreen(px, py, zPlane){
+  const v = viewSize();
+  const tanY = Math.tan(camera.fov*Math.PI/360), tanX = tanY*camera.aspect;
+  const ndcX = (px/v.w)*2 - 1, ndcY = -((py/v.h)*2 - 1);
+  heroRay.set(ndcX*tanX, ndcY*tanY, -1).applyQuaternion(camera.quaternion);
+  const k = (zPlane - camera.position.z)/heroRay.z;
+  return {x: camera.position.x + heroRay.x*k, y: camera.position.y + heroRay.y*k, z: zPlane};
+}
+/* L'inverse : une position monde -> sa place a l'ecran (px). */
+const heroTmp = new THREE.Vector3();
+function screenAtWorld(x, y, z){
+  const v = viewSize();
+  heroTmp.set(x,y,z).project(camera);
+  return {x:(heroTmp.x+1)*.5*v.w, y:(1-heroTmp.y)*.5*v.h};
+}
+
+/* Recentrage : d'autant plus fort que l'ecran est ETROIT (telephone en
+   portrait, tablette) ou que la zone libre est BASSE (telephone en paysage).
+   Grand ecran : 0 -> le cadrage d'origine est conserve tel quel. */
+function heroCenterGain(aspect, zoneH){
+  const etroit = clamp((1.30 - aspect)/.45, 0, 1);   // ecran etroit -> 1
+  const bas    = clamp((620 - zoneH)/280, 0, 1);     // zone libre tres basse -> 1
+  return Math.max(etroit, bas);
+}
+
+/* Position de REPOS du billet en main (hors tremblement). Elle sert a trois choses :
+   - placer le billet lui-meme (taille ET place) ;
+   - dire a la plaque des projets (liste des films) jusqu'ou elle peut descendre sur
+     la devanture sans masquer le billet.
+   Le billet REMONTE un peu par rapport a sa position d'avant : il se detache
+   visuellement du comptoir. Le deplacement est proportionnel a la taille de l'ecran
+   (donc discret sur mobile, ou la place manque) et borne : le billet entierement
+   dans le cadre, toujours. */
+function heroRest(){
+  const hh = viewHalfH(HERO_D);                               // demi-hauteur visible au plan du billet
+  const hw = viewHalfW(HERO_D);                               // demi-largeur visible
+  const aspect = viewAspect();
+  const v = viewSize();
+  const wf = aspect < .85 ? .90 : .74;                        // on tient le billet dans le cadre
+  const fit = Math.min((2*hw*wf)/1.5, (2*hh*.52)/.9);         // jamais coupe, le plus grand possible
+  const rise = Math.min(.10, hh*(aspect < .85 ? .075 : .16)); // remontee : forte sur grand ecran, legere sur mobile
+  const zone = heroZone || measureHeroZone();
+  const zPlane = Math.max(.6, camera.position.z - HERO_D);
+  /* 1. la TAILLE : le billet doit TENIR entierement dans la zone libre (qui est
+        plus petite que l'ecran : barres, invite, bouton). La remontee est
+        comptee dans la place disponible, elle aussi, et on garde 8 px de rab
+        (la perspective fait remonter un peu les coins). */
+  const risePx = rise*(v.h/(2*hh));                            // la remontee, en pixels ecran
+  const fitW = (2*hw*(zone.w/v.w))/1.5;
+  const fitH = (2*hh*(zone.h - 2*risePx - 8)/v.h)/.9;
+  const scale = Math.max(.05, Math.min(fit, .58, fitW, fitH));   // jamais de billet invisible ni aplati
+  /* 2. la POSITION : on part du cadrage d'origine (il suit la parallaxe de la
+        camera) et on le corrige vers le CENTRE de la zone libre, d'autant plus
+        que le format l'exige. Grand ecran : rien ne bouge. */
+  const base = {x:0, y: camBaseY - .14 + rise, z: zPlane};
+  const g = heroCenterGain(aspect, zone.h);
+  camera.updateMatrixWorld();
+  if(g <= 0) return {x:base.x, y:base.y, z:base.z, scale, rise};
+  const cur = screenAtWorld(base.x, base.y, base.z);          // l'ancienne place, a l'ecran
+  const tgt = {x: zone.cx, y: zone.cy - risePx};               // la cible : centre de la zone, moins la remontee
+  const p = worldAtScreen(cur.x + (tgt.x-cur.x)*g, cur.y + (tgt.y-cur.y)*g, zPlane);
+  return {x:p.x, y:p.y, z:zPlane, scale, rise};
+}
+
 function desired(t, now){
   const h = t.home;
   const isHero = (heroIdx >= 0 && !t.stamped && t.i === heroIdx);
@@ -3171,14 +3478,11 @@ function desired(t, now){
     y += .06; z += .06; ry += .05; scale *= 1.05;
   }
   if(isHero){                                   // le billet vintage, en main, bien lisible au-dessus du comptoir
-    const hh = viewHalfH(HERO_D);                               // demi-hauteur visible au plan du billet
-    const hw = viewHalfW(HERO_D);                               // demi-largeur visible
-    const wf = viewAspect() < .85 ? .90 : .74;                  // on tient le billet dans le cadre
-    const fit = Math.min((2*hw*wf)/1.5, (2*hh*.52)/.9);         // jamais coupe, le plus grand possible
-    x = 0; y = camBaseY - .14 + Math.sin(now*.6 + t.phase)*.02;
-    z = Math.max(.6, camera.position.z - HERO_D);
+    const hr = heroRest();                                   // position de repos (taille + place + remontee)
+    x = hr.x; y = hr.y + Math.sin(now*.6 + t.phase)*.02;
+    z = hr.z;
     rx = -.02 + t.dragXc; ry = t.dragYc + Math.sin(now*.4 + t.phase*1.7)*.03;
-    scale = Math.min(fit, .58); op = 1;
+    scale = hr.scale; op = 1;
   }
   if(isHover){
     if(isHero){ scale *= 1.05; }
@@ -3223,7 +3527,10 @@ function updateCurtains(now){
   applyCurtainLighting();
   // rideau ferme : la cloche " respire " (halo pulsant) -> on comprend qu'un clic l'ouvre
   if(bellGlow && curtainT > .02) bellGlow.material.opacity *= .78 + .22*Math.sin(now*2.6);
-  if(bellHint) bellHint.classList.toggle("show", curtainT > .45);
+  if(bellHint){
+    placeBellHint();                                   // la fleche suit la cloche (parallaxe de la camera comprise)
+    bellHint.classList.toggle("show", curtainT > .45);
+  }
 }
 
 /* Halo de la pile : tres visible au repos (attire l'oeil), discret lorsqu'un billet est en
@@ -3342,6 +3649,7 @@ function startLoop(){
     updatePileGlow(now);
     updateAwards(now);
     updateTickets(now, dt, frame);
+    placeProjectList();        // la plaque des projets reste collee au bois du guichet
 
     renderer.render(scene, camera);
     if((frame & 31) === 0) updateClock();       // horloge de la cabine : heure locale (2 x/s)

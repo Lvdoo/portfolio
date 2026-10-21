@@ -60,7 +60,7 @@ button{font-family:inherit}
 
 /* -- loader -- */
 #loader{position:fixed;inset:0;background:#000;z-index:500;display:flex;align-items:center;justify-content:center;transition:opacity .6s,visibility .6s}
-body:not([data-loading="true"]) #loader{opacity:0;visibility:hidden}
+body:not([data-loading="true"]) #loader{opacity:0;visibility:hidden;pointer-events:none}
 .loader-frame{width:min(460px,86vw);aspect-ratio:4/5;border:1px solid #333;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:18px;background:radial-gradient(circle at 50% 45%,#1c1c1e,#000 70%)}
 .loader-frame::before,.loader-frame::after{content:"";position:absolute;top:0;bottom:0;width:26px;background:repeating-linear-gradient(#000 0 14px,#111 14px 28px);border-left:1px dashed #333;border-right:1px dashed #333}
 .loader-frame::before{left:-27px}.loader-frame::after{right:-27px}
@@ -212,6 +212,37 @@ body[data-loading="true"] #ticketBar{opacity:0}
 .project-list-item:hover,.project-list-item:focus-visible{color:var(--creme);transform:scale(1.14)}
 .project-list-item:active{color:var(--creme);transform:scale(1.08)}
 .project-list-item.active{color:var(--gold)}
+
+/* -- la liste des projets QUITTE la barre : elle se pose sur la DEVANTURE du guichet.
+   JS mesure si les six titres tiennent vraiment sur UNE ligne dans la barre noire ;
+   si non, il pose body.list-facade et calcule le rectangle de la plaque en pixels
+   ecran (projection du plan avant du comptoir en bois, comme la fleche de la cloche).
+   Le rectangle (left/top/width/height) est ecrit en inline par placeProjectList. -- */
+body.list-facade #ticketBar{
+  right:auto;bottom:auto;height:auto;padding:0;background:none;border-top:0;
+  align-items:center;pointer-events:none;                 /* la plaque ne mange pas les gestes du canvas */
+  transition:opacity .45s}
+/* la plaque : une etiquette de bois, cloutee sur le comptoir, discrete mais lisible */
+body.list-facade #ticketBar::before{
+  content:"";position:absolute;inset:-8px -6px;border-radius:4px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(9,6,4,.88),rgba(9,6,4,.74));
+  border:1px solid rgba(212,163,115,.26);
+  box-shadow:0 10px 28px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,226,182,.10)}
+/* sur le bois, les titres passent en PLUSIEURS RANGEES : ils sont plus gros et
+   lisibles, et ils ne dependent plus du defilement horizontal. */
+body.list-facade .project-list{
+  flex-wrap:wrap;align-content:center;justify-content:center;align-items:center;
+  gap:4px clamp(10px,3vw,22px);height:auto;overflow:visible;padding:0 4px;
+  pointer-events:none;touch-action:auto}
+body.list-facade .project-list-item{
+  pointer-events:auto;
+  font-size:clamp(11px,3.1vw,14px);letter-spacing:.12em;
+  padding:10px 8px;margin:0;                            /* rangees espacees : le texte ne se colle pas */
+  color:var(--creme-dim)}
+body.list-facade .project-list-item.active{color:var(--gold)}
+/* filet de securite : si meme en rangees les titres debordent de la plaque, on
+   repasse en defilement horizontal (plutot que de couper un titre). */
+body.list-facade-scroll .project-list{flex-wrap:nowrap;justify-content:safe center;overflow-x:auto}
 /* L'ETAT (" SCROLL TO CHOOSE A TICKET " / nom du billet en main) est
    place AU-DESSUS de la barre noire, CENTRE horizontalement, RASE la barre (petit
    ecart de 6px) pour rester au plus pres d'elle. Au-dessus (et non dedans) : c'est
@@ -250,21 +281,33 @@ body[data-loading="true"]:not(.hand) #stampBtn{opacity:0;visibility:hidden;point
 body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOSE A TICKET " est doree */
 
 /* -- invite " sonnez la cloche " : guichet ferme, seule la cloche est eclairee.
-   La position (left/top) est calee sur la cloche par placeBell().
+   La fleche est posee AU-DESSUS du sommet de la cloche : sa position est calee sur
+   le sommet PROJETE de la cloche (placeBellHint) -> elle suit la cloche sur TOUS les
+   formats (desktop large, telephone en portrait) et suit meme sa parallaxe.
+   Elle VACILLE de haut en bas : c'est ce mouvement qui dit " clique la cloche ".
    C'est un vrai bouton (acces clavier + cible tactile), mais invisible et non
-   cliquable tant que le guichet est ouvert (.show). -- */
-#bellHint{position:fixed;left:50%;top:auto;bottom:calc(var(--bar) + 40px + var(--sab));z-index:300;max-width:calc(100vw - 32px);margin:0;
-  display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;
+   cliquable tant que le guichet est ouvert (.show).
+   Le deplacement se fait en transform (ecrit par le JS) : aucun recalcul de mise en
+   page. La fleche elle-meme se deplace avec la propriete `translate` (independante du
+   transform), pour que l'entree en scene et le vacillement ne se marchent pas dessus. -- */
+#bellHint{position:fixed;left:0;top:0;z-index:300;margin:0;padding:0;
+  display:flex;flex-direction:column;align-items:center;cursor:pointer;
   background:none;border:0;appearance:none;-webkit-appearance:none;
   pointer-events:none;visibility:hidden;
-  opacity:0;transform:translate(-50%,14px);
-  transition:opacity .5s,transform .5s,visibility .5s}
-#bellHint.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;visibility:visible}
+  opacity:0;will-change:transform;
+  transition:opacity .5s,visibility .5s}
+#bellHint.show{opacity:1;pointer-events:auto;visibility:visible}
 /* cible confortable au doigt, sans deplacer la fleche */
 #bellHint::after{content:"";position:absolute;inset:-16px -20px}
-#bellHint .bh-arrow{color:var(--gold);font-size:14px;line-height:1;letter-spacing:0;
-  animation:bhBlink 1.9s ease-in-out infinite}
-@keyframes bhBlink{0%,100%{opacity:.3;transform:translateY(-3px)}50%{opacity:1;transform:translateY(3px)}}
+/* La fleche : or, large, lisible sur le velours rouge, et elle monte et descend
+   sans arret. `translate` pour le vacillement, `transform` pour l'entree en scene. */
+#bellHint .bh-arrow{color:var(--gold);font-size:22px;line-height:1;letter-spacing:0;
+  text-shadow:0 0 14px rgba(176,138,62,.55),0 2px 6px rgba(0,0,0,.85);
+  transform:translateY(0)}
+#bellHint.show .bh-arrow{animation:bhIn .45s cubic-bezier(.2,.9,.25,1) both,
+                                bhBob 1.5s ease-in-out .45s infinite}
+@keyframes bhIn{from{transform:translateY(-10px)}to{transform:translateY(0)}}
+@keyframes bhBob{0%,100%{translate:0 -6px;opacity:.65}50%{translate:0 6px;opacity:1}}
 
 /* -- fiche film - DA " affiche de film " -- */
 #detail{position:fixed;inset:0;z-index:400;display:none}
@@ -406,6 +449,9 @@ body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOS
 :where(a,button,[tabindex]):focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s !important;transition-duration:.001s !important}
+  /* la fleche de la cloche : plus de vacillement (une animation infinie en .001s
+     clignoterait) -> elle reste posee, au-dessus de la cloche, immobile */
+  #bellHint .bh-arrow{animation:none !important}
 }
 
 /* =============================================================
