@@ -11,6 +11,23 @@ const CONFIG = {
   github: "https://github.com/Lvdoo",
 };
 
+/* -- THREE.JS PEUT-IL MANQUER ? -------------------------------------------
+   Le site est un FICHIER LOCAL (double-clic) : sur une tablette, un reseau
+   bloque, coupe ou lent peut faire echouer le chargement de Three.js. Si la
+   bibliotheque manque, on ne casse PAS tout le site pour autant : la liste des
+   projets, le HUD, les fiches et le repli "noWebgl" (les six films en cartes)
+   restent la. Seule la scene 3D disparait.
+   (three.min.js est livre en local dans assets/ ; le CDN reste en repli.) */
+const HAS_THREE = (typeof THREE !== "undefined");
+/* Les " scratchs " 3D (vecteurs, matrices, rayon) ne servent QUE dans la scene :
+   camera, boucle de rendu, projections. Si Three.js manque, ils ne sont jamais
+   dereferences - on les alloue donc a null plutot que de faire tomber le script
+   (et avec lui, la liste des projets). */
+const newV3  = HAS_THREE ? (x,y,z) => new THREE.Vector3(x,y,z) : () => null;
+const newRay = HAS_THREE ? () => new THREE.Raycaster()           : () => null;
+const newM4  = HAS_THREE ? () => new THREE.Matrix4()              : () => null;
+const newM3  = HAS_THREE ? () => new THREE.Matrix3()              : () => null;
+
 /* -- LES 6 FILMS (projets) ------------------------------------------
    front / back = media du ticket (recto / verso).
    Pas encore de fichier ? L'emplacement " VISUEL A VENIR " s'affiche.
@@ -855,17 +872,17 @@ let boothLamp = null, boothWarm = null, boothLampLight = null;
 const BELL_NDC = -.58;                                        // position ecran de la cloche (world x calcule par placeBell)
 const BELL_TOP_Y = .12;                                       // hauteur du SOMMET de la cloche (dome .10 + bouton .082+.028)
 const BELL_HINT_GAP = 24;                                     // px : espace entre la pointe de la fleche et le sommet de la cloche
-const bellNdc = new THREE.Vector3();                          // scratch : position ecran de la cloche (invite " sonnez " )
+const bellNdc = newV3();                               // scratch : position ecran de la cloche (invite " sonnez " )
 /* projecteur du curseur : un faisceau doux + une tache de lumiere qui eclairent, en
    direct, l'endroit vise par le pointeur (billet compris). Eteint quand le guichet est ferme. */
 const cursorNdc = { x:0, y:0 };                               // position du pointeur en NDC
 let cursorOn = false, cursorFade = 0;                         // pointeur vu ? / fondu courant
 let cursorSpot = null, cursorBeam = null, cursorGlow = null;  // spot, faisceau visible, tache posee
 let cursorBeamMat = null, cursorGlowMat = null;
-const cursorHit = new THREE.Vector3();                        // point eclaire (recalcule chaque frame)
+const cursorHit = newV3();                             // point eclaire (recalcule chaque frame)
 const awardEnvMats = [];                                      // materiaux des trophees (reflets adoucis quand ferme)
 let awardSpot = null;                                         // petite source douce qui revele l'or quand un trophee est pris
-const awardSpotV = new THREE.Vector3();                       // scratch : position monde du trophee en main
+const awardSpotV = newV3();                            // scratch : position monde du trophee en main
 /* ---- Gestes tactiles / souris ---------------------------------------------------------
    Un geste = UN doigt (souris comprise) suivi du pose au leve. On note ou il a commence,
    quand, et avec quel doigt : c'est ce qui permet de distinguer
@@ -881,7 +898,7 @@ let tookAtDown = false;                      // l'appui a DEJA change de billet 
 const TAP_RADIUS_PX = 34;                    // " marge de touche " : rayon en pixels autour d'un objet
 let lastTouchAt = -1e9;                      // date du dernier evenement tactile (filtre les " mouse " fantomes)
 const pointerNdc = { x:0, y:0 };
-const raycaster = new THREE.Raycaster();
+const raycaster = newRay();
 const byId = {};
 
 /* ================== GUICHET VINTAGE : textures canvas ================== */
@@ -1263,11 +1280,61 @@ function getAwardEnv(){
   return awardEnv;
 }
 /* ============ PLAQUES GRAVEES DES DEUX TROPHEES ============
-   Les deux socles portent une VRAIE plaque de laiton gravee : un CanvasTexture
-   haute resolution pour la matiere + le MEME dessin en bumpMap (le creux de la
-   gravure capte la lumiere) pose sur une fine plaque geometrique solidaire du
-   socle — jamais du texte flottant devant l'objet.
-   Une seule ligne gravee : la devise du trophée. AUCUN nom personnel (il ne
+   Les deux socles portent une VRAIE plaque de laiton gravee, posee sur une fine
+   plaque geometrique solidaire du socle — jamais du texte flottant devant l'objet.
+   La gravure elle-meme vient des RENDUS REELS (1080 x 240) dans assets/ :
+     assets/plate-cesar.png      plaque au repos    (FROM CODE TO REALITY)
+     assets/plate-cesar-lit.png  plaque eclairee   (meme plaque, source chaude)
+     assets/plate-oscar.png      plaque au repos    (CREATIVE TECHNOLOGIST)
+     assets/plate-oscar-lit.png  plaque eclairee
+   Le rendu fait TOUT : laiton, cadre, gravure dans le creux, lumiere. Il sert a la
+   fois d'albedo (map) et de relief (bumpMap) : dans le rendu la gravure est plus
+   SOMBRE que le metal, elle tombe donc bien dans le creux sous la lumiere.
+   Quand le trophee est pris en main, sa plaque passe en version " eclairee " : la
+   gravure ressort sous la source studio (le relief, lui, reste sur le rendu calme —
+   la profondeur de la gravure est la meme dans les deux images).
+   Repli silencieux : si le PNG est absent (ou bloque), on peint la plaque au
+   Canvas 2D comme avant (laiton + devise) — le site fonctionne toujours. */
+const PLATE_FILES = {
+  cesar:{rest:"assets/plate-cesar.png", lit:"assets/plate-cesar-lit.png"},
+  oscar:{rest:"assets/plate-oscar.png", lit:"assets/plate-oscar-lit.png"}
+};
+const PLATE_IMG = {cesar:{rest:null, lit:null}, oscar:{rest:null, lit:null}};  // <img> prechargees
+const PLATE_TEX = {cesar:{rest:null, lit:null}, oscar:{rest:null, lit:null}};  // textures three
+/* Prechargement des rendus de plaque (comme les medias du site) : une image
+   manquante ne bloque jamais le boot, elle tombe sur le repli Canvas 2D. */
+function preloadPlateImg(src){
+  return new Promise(res => {
+    const im = new Image();
+    im.onload  = () => res(im);
+    im.onerror = () => res(null);
+    setTimeout(() => res(null), 8000);      // garde-fou : reseau gele = repli, jamais bloque
+    im.src = src;
+  });
+}
+async function preloadPlates(){
+  const jobs = [];
+  for(const k in PLATE_FILES) for(const kind in PLATE_FILES[k])
+    jobs.push(preloadPlateImg(PLATE_FILES[k][kind]).then(im => { PLATE_IMG[k][kind] = im; }));
+  await Promise.all(jobs);
+}
+/* Texture three d'un rendu de plaque (mise en cache : une seule par image). */
+function plateTexture(key, kind){
+  const im = PLATE_IMG[key] && PLATE_IMG[key][kind];
+  if(!im) return null;
+  if(PLATE_TEX[key][kind]) return PLATE_TEX[key][kind];
+  const t = new THREE.Texture(im);
+  t.colorSpace  = THREE.SRGBColorSpace;
+  t.anisotropy  = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  PLATE_TEX[key][kind] = t;
+  return t;
+}
+/* Une seule ligne gravee : la devise du trophée. AUCUN nom personnel (il ne
    figure que dans la section Contact du site). */
 function plateCanvas(title, sub, w, h){
   return texCanvas(w, h, (c) => {
@@ -1324,41 +1391,70 @@ function plateCanvas(title, sub, w, h){
     }
   });
 }
-/* Materiau de plaque : laiton + bump (le texte part reellement en creux).
+/* Materiau de plaque : le rendu PNG quand il est la, sinon la plaque peinte au
+   Canvas 2D (repli). Dans les deux cas le MEME dessin sert de map et de bumpMap
+   (le creux de la gravure capte la lumiere).
    side Simple (les plaques sont des volumes fermes, pas des plans flottants). */
-function awardPlateMat(title, sub, w, h){
-  const cv = plateCanvas(title, sub, w, h);
-  const map = new THREE.CanvasTexture(cv);
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-  const bump = new THREE.CanvasTexture(cv);              // meme dessin, en relief
-  return new THREE.MeshPhysicalMaterial({
-    map, bumpMap: bump, bumpScale: .00055,
-    // emissif discret : le laiton doit rester lisible meme sans envMap (metal presque pur)
-    metalness: .95, roughness: .30, envMapIntensity: .9,
+function awardPlateMat(title, sub, w, h, key){
+  const mat = new THREE.MeshPhysicalMaterial({
+    map:null, bumpMap:null, bumpScale:.00055,
+    metalness:.95, roughness:.30, envMapIntensity:.9,
     emissive:0x1a1206, emissiveIntensity:.22
   });
+  const tex = key ? plateTexture(key, "rest") : null;
+  if(tex){
+    /* RENDU REEL : albedo + relief. La lumiere du studio est deja cuite dans
+       l'image -> le metal est un peu moins metallique et un peu plus mat, sinon
+       la gravure se perdrait dans les reflets de l'environnement. */
+    mat.map = tex; mat.bumpMap = tex; mat.bumpScale = .00042;
+    mat.metalness = .78; mat.roughness = .34; mat.envMapIntensity = .8;
+    mat.emissive.setHex(0x140d04); mat.emissiveIntensity = .16;   // .setHex : emissive est une Color, pas un nombre
+  }else{
+    const cv = plateCanvas(title, sub, w, h);
+    const map = new THREE.CanvasTexture(cv);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+    const bump = new THREE.CanvasTexture(cv);              // meme dessin, en relief
+    mat.map = map; mat.bumpMap = bump;
+  }
+  mat.needsUpdate = true;
+  mat.userData.plateKey = key || null;
+  return mat;
 }
 /* Plaque de laiton en volume : un vrai morceau de metal grave pose sur le socle.
    - le Cesar a un socle CARRE -> plaque PLATE (boite fine, la face avant porte
      la gravure, les chants sont du laiton) ;
    - l'Oscar a un socle ROND -> plaque CINTREE (bandeau de cylindre) : une plaque
      plate " flotterait " de plus d'un centimetre devant la courbure du socle. */
-function awardPlateFace(title, sub){
-  return awardPlateMat(title, sub, 1080, 240);
+function awardPlateFace(title, sub, key){
+  return awardPlateMat(title, sub, 1080, 240, key);
 }
-function awardPlateMesh(title, sub){
-  const face = awardPlateFace(title, sub);
+function awardPlateMesh(title, sub, key){
+  const face = awardPlateFace(title, sub, key);
   const chant = new THREE.MeshPhysicalMaterial({color:0xb08c46, metalness:.95, roughness:.34, envMapIntensity:.85, emissive:0x1a1206, emissiveIntensity:.20});
-  return new THREE.Mesh(new THREE.BoxGeometry(.074, .0165, .0022),
+  const m = new THREE.Mesh(new THREE.BoxGeometry(.074, .0165, .0022),
     [chant, chant, chant, chant, face, chant]);          // index 4 = face +Z
+  m.userData.faceMat = face;                             // le materiau de la gravure, pour l'eclairage
+  return m;
 }
-function awardPlateCurved(title, sub, radius){
-  const face = awardPlateFace(title, sub);
+function awardPlateCurved(title, sub, radius, key){
+  const face = awardPlateFace(title, sub, key);
   face.side = THREE.DoubleSide;                          // bandeau ouvert : on voit l'exterieur
   const arc = .074, theta = arc/radius;                  // meme largeur gravee que la plaque plate
   return new THREE.Mesh(
     new THREE.CylinderGeometry(radius, radius, .0165, 44, 1, true, -theta/2, theta), face);
+}
+/* Version " eclairee " de la plaque (trophee pris en main) : l'albedo passe au
+   rendu sous la source chaude, mais le RELIEF reste sur le rendu calme — la
+   gravure a la meme profondeur dans les deux images. Sans rendu eclaire, la
+   plaque garde son aspect courant. */
+function setPlateLit(o, lit){
+  const mat = o && o.userData.plateMat, key = o && o.userData.plateKey;
+  if(!mat || !key) return;
+  const tex = plateTexture(key, lit ? "lit" : "rest");
+  if(!tex) return;
+  mat.map = tex;
+  mat.needsUpdate = true;
 }
 /* --- micro-variation de rugosite pour l'or et le bronze : sans elle, un metal
    parfaitement uniforme a l'air d'une couleur jaune, pas d'un vrai metal. --- */
@@ -1448,8 +1544,9 @@ function makeOscarStatue(title, sub){
     P2(.000, BH)
   ], 72), lacq));
   // plaque gravee (nom + signature) : bandeau de laiton CINTRE sur la face avant du socle
-  const oPlate = awardPlateCurved(title, sub, BR + .0010);
+  const oPlate = awardPlateCurved(title, sub, BR + .0010, "oscar");
   oPlate.position.set(0, BH*.47, 0); g.add(oPlate);
+  g.userData.plateMat = oPlate.material;                 // plaque (gravure) : pour l'eclairage
 
   /* ---- 2) BOBINE DE FILM A CINQ RAYONS : or poli, un TROU pile face au client ---- */
   const RH = .012, R = .034, hubR = .0125, rimIn = .0275, ry = BH;
@@ -1616,8 +1713,9 @@ function makeCesarStatue(title, sub){
   plinth.position.y = BH/2; g.add(plinth);
   const cap = new THREE.Mesh(new THREE.BoxGeometry(BS-.007, .0032, BS-.007), noir);
   cap.position.y = BH + .0006; g.add(cap);
-  const plate = awardPlateMesh(title, sub);
+  const plate = awardPlateMesh(title, sub, "cesar");
   plate.position.set(0, BH*.48, BS/2 + .0006); g.add(plate);
+  g.userData.plateMat = plate.userData.faceMat;          // plaque (gravure) : pour l'eclairage
 
   /* --- LA COMPRESSION : 26 cm au-dessus du socle (29,2 cm au total, crete du
      sommet comprise) ; section etroite — le vrai Cesar est un fuseau de ~5 cm
@@ -1859,14 +1957,18 @@ function makeVintageBooth(){
   //     un clic les prend " comme un billet " pour lire la PLAQUE DE LAITON GRAVEE
   //     de leur socle (leur devise, aucun nom personnel), aucun lien sortant. ---
   boothCesar = makeCesarStatue("FROM CODE TO REALITY");
+  const cesarPlate = boothCesar.userData.plateMat;       // materiau de la plaque (gravure)
   boothCesar.position.set(CESAR_X0, 0, .45);          // x affine par placeCesar() selon la largeur d'ecran
   boothCesar.userData = { home:{x:CESAR_X0, y:0, z:.45, ry:0, scale:1}, at:0,
-    hLocal:.292, wLocal:.100, dy:0, dx:0, dyc:0, dxc:0, label:"CESAR" };
+    hLocal:.292, wLocal:.100, dy:0, dx:0, dyc:0, dxc:0, label:"CESAR",
+    plateKey:"cesar", plateMat:cesarPlate, plateLit:false };
   g.add(boothCesar);
   boothOscar = makeOscarStatue("CREATIVE TECHNOLOGIST");
+  const oscarPlate = boothOscar.userData.plateMat;
   boothOscar.position.set(CESAR_X0 - AWARD_GAP, 0, .45);
   boothOscar.userData = { home:{x:CESAR_X0 - AWARD_GAP, y:0, z:.45, ry:0, scale:1}, at:0,
-    hLocal:.343, wLocal:.136, dy:0, dx:0, dyc:0, dxc:0, label:"OSCAR" };
+    hLocal:.343, wLocal:.136, dy:0, dx:0, dyc:0, dxc:0, label:"OSCAR",
+    plateKey:"oscar", plateMat:oscarPlate, plateLit:false };
   g.add(boothOscar);
   // reflets reels sur l'or et le bronze des deux trophees (repli : emissif de secours).
   // Attention : les plaques de laiton sont des boites a 6 materiaux -> on parcourt les tableaux.
@@ -3308,7 +3410,11 @@ function bindWorld(){
   addEventListener("keydown", onKeyDown);
   addEventListener("wheel", onWheel, {passive:false});
   addEventListener("resize", onResize);
-  addEventListener("orientationchange", () => setTimeout(onResize, 220), {passive:true});   // rotation : iOS redimensionne apres coup
+  addEventListener("orientationchange", () => {
+    setTimeout(onResize, 150);
+    setTimeout(onResize, 300);
+    setTimeout(onResize, 500);
+  }, {passive:true});   // rotation : iOS redimensionne apres coup
   if(window.visualViewport) visualViewport.addEventListener("resize", onResize, {passive:true});   // barre d'URL mobile
   addEventListener("pointerout", e => { if(!e.relatedTarget) cursorOn = false; }, {passive:true});  // souris sortie de la page
   new IntersectionObserver(es => es.forEach(en => {
@@ -3349,6 +3455,7 @@ function onResize(){
     computeLayout();                   // repositionne camera, rang des billets et rideaux
     measureHeroZone();                 // la zone libre a change de taille : le billet en main se recadre
     layoutProjectList();               // la liste des projets : on re-mesure (elle a change de place ?)
+    placeBellHint();
   });
 }
 
@@ -3580,15 +3687,31 @@ function updateAwards(now){
     const want = heldAward ? 1.05*heldT : 0;
     awardSpot.intensity += (want - awardSpot.intensity)*.10;
     if(awardSpot.intensity < .01){ awardSpot.intensity = 0; awardSpot.visible = false; }
-    else{
+    else if(heldAward){                            // la source ne s'allume que pour le trophee EN MAIN
       awardSpot.visible = true;
       heldAward.getWorldPosition(awardSpotV);
       awardSpotV.y += heldAward.userData.hLocal*.42;        // on vise le torse / la compression
       awardSpot.position.set(awardSpotV.x*.30, awardSpotV.y + .62, camera.position.z - .45);
       awardSpot.target.position.copy(awardSpotV);
       awardSpot.target.updateMatrixWorld();
+    }else{
+      // le trophee vient d'etre repose : plus rien a viser, la source s'eteint
+      // (son intensite descend toute seule — avant, ce chemin levait une erreur
+      //  et le rendu se figeait le temps que la lumiere s'eteigne).
+      awardSpot.visible = false;
     }
   }
+  // la plaque d'un trophee passe en version " eclairee " des que le trophee est
+  // pris en main (la gravure ressort sous la source studio) et rebascule quand
+  // il repose. Bascule a mi-course : le changement passe inapercu.
+  [boothCesar, boothOscar].forEach(o => {
+    if(!o) return;
+    const lit = o.userData.at > .5;
+    if(lit !== o.userData.plateLit){
+      o.userData.plateLit = lit;
+      setPlateLit(o, lit);
+    }
+  });
   if(awardNext && !awardTaken){
     const rest = [boothCesar, boothOscar].every(o => !o || o.userData.at < .0025);
     if(rest) takeAward(awardNext);              // le rangement est fini : on prend la suivante
@@ -3933,11 +4056,13 @@ async function fontsReady(){
   fontsLoaded = true; updateLoaderProgress();
 }
 async function boot(){
-  /* On lance en parallele : prechargement des medias, polices, et (au plus tot) la
-     construction de la scene, pour que le compte a rebours ait le moins a attendre. */
+  /* On lance en parallele : prechargement des medias, des rendus de plaque, des
+     polices, et (au plus tot) la construction de la scene, pour que le compte a
+     rebours ait le moins a attendre. */
   const assets = preloadAll();
+  const plates = preloadPlates();
   const fonts  = fontsReady();
-  await Promise.all([assets, fonts]);
+  await Promise.all([assets, plates, fonts]);
   if(buildStarted) return; buildStarted = true;
   try{
     initHud();
