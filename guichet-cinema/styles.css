@@ -93,9 +93,6 @@ body:not([data-loading="true"]) #loader{opacity:0;visibility:hidden;pointer-even
 .main-nav a sup{font-size:10px;color:var(--gold)}
 .ticket-mini{border:1px dashed var(--creme);padding:6px 12px;border-radius:2px}
 .ticket-mini:hover{background:var(--creme);color:#000}
-.sound-btn{background:none;border:1px solid var(--line);color:var(--creme-dim);padding:6px 10px;cursor:pointer;font-size:11px;letter-spacing:.12em;border-radius:2px}
-.sound-btn:hover{border-color:var(--gold);color:var(--creme)}
-.sound-btn[aria-pressed="false"]{color:#666;border-color:#333}
 #menuBtn{display:none;background:none;border:1px solid var(--line);color:var(--creme);padding:6px 10px;cursor:pointer}
 
 /* La liste des projets vit dans la barre NOIRE INFERIEURE (#ticketBar) : styles
@@ -431,7 +428,6 @@ body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOS
 @media(max-width:700px){
   .main-nav a{display:none}
   #menuBtn{display:block}
-  .sound-btn{margin-left:auto}
   section{padding:56px 18px}
   .detail-media{grid-template-columns:1fr}
   .detail-scroll{padding:20px 18px 26px}
@@ -669,7 +665,7 @@ a,button,summary{touch-action:manipulation}
    sans changer l'apparence (padding transparent) */
 @media(pointer:coarse){
   .main-nav a{padding-block:15px}
-  .sound-btn,#menuBtn{padding:14px 13px;min-height:44px;display:inline-flex;align-items:center}
+  #menuBtn{padding:14px 13px;min-height:44px;display:inline-flex;align-items:center}
   #menuClose{padding:12px 16px}
   /* 44px minimum partout (recommandation WCAG 2.5.5 / Apple HIG) */
   .brand{padding:9px;margin-inline:-9px}
@@ -704,7 +700,7 @@ a,button,summary{touch-action:manipulation}
 @media(max-width:360px){
   .brand-text{display:none}
   .main-nav{gap:10px}
-  .sound-btn,#menuBtn{padding:10px 8px;font-size:10px}
+  #menuBtn{padding:10px 8px;font-size:10px}
   .stamp-title{font-size:9px}
   .btn--stamp{padding:10px 16px;font-size:11px}
 }

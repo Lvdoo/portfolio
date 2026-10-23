@@ -1,13 +1,11 @@
 /* ===================================================================
-   LUDO LA BETE - LE GUICHET - portfolio cinema 3D (Three.js)
-   Chaque ticket = un projet. Survole -> clique -> tourne le ticket ->
-   tamponne-le -> la fiche " film " s'ouvre.
+   LUDOVIC LI - THE BOX OFFICE - 3D cinema portfolio (Three.js)
+   Each ticket = one project. Hover -> click -> spin the ticket ->
+   stamp it -> the "film" card opens.
+   (The contact e-mail lives in index.html: #mailBtn / #ticketEmail.)
    =================================================================== */
 
-/* -- CONFIG - * modifie ici : email, nom, liens -- */
 const CONFIG = {
-  name: "Ludovic LI",
-  email: "LUDO.CREATIVE@EMAIL.COM", // <- remplace par le vrai email
   github: "https://github.com/Lvdoo",
 };
 
@@ -30,8 +28,8 @@ const newM3  = HAS_THREE ? () => new THREE.Matrix3()              : () => null;
 
 /* -- LES 6 FILMS (projets) ------------------------------------------
    front / back = media du ticket (recto / verso).
-   Pas encore de fichier ? L'emplacement " VISUEL A VENIR " s'affiche.
-   Depose le fichier au bon nom dans assets/ et il apparait tout seul. */
+   No file yet? A "PLACE RESERVED" placeholder is shown instead.
+   Drop the file with the right name into assets/ and it shows up by itself. */
 const PROJECTS = [
   {
     id:"terubot", num:"001", title:"TeruBot", accent:"#e03131",
@@ -195,9 +193,8 @@ function viewAspect(){ const s = viewSize(); return s.w/s.h; }
 
 /* ================== Medias (prechargement) ================== */
 const MEDIA = new Map(); // src -> {kind:'image'|'video'|'missing', el, ok}
-let loadedCount = 0, buildStarted = false;
+let buildStarted = false;
 const uniqueSrcs = [...new Set(PROJECTS.flatMap(p => [p.front.src, p.back.src]))];
-const TOTAL = uniqueSrcs.length;
 
 function getMedia(src){ return MEDIA.get(src) || {kind:"missing", el:null, ok:false}; }
 
@@ -206,7 +203,7 @@ function preloadOne(src){
     const record = (kind, el, ok) => {
       if(MEDIA.has(src)) return;
       MEDIA.set(src, ok ? {kind, el, ok:true} : {kind:"missing", el:null, ok:false});
-      loadedCount++; updateLoaderProgress(); res();
+      updateLoaderProgress(); res();
     };
     if(isVideo(src)){
       const v = document.createElement("video");
@@ -462,7 +459,7 @@ function drawCover(ctx,el,x,y,w,h){
   const sh = el.videoHeight || el.naturalHeight || el.height || 0;
   if(!sw || !sh) return;
   const s = Math.max(w/sw, h/sh);
-  try{ ctx.drawImage(el, x+(w-sw*s)/2, y+(h-sh*s)/2, sw*s, sh*s); }catch(_){}
+  try{ ctx.drawImage(el, x+(w-sw*s)/2, y+(h-sh*s)/2, sw*s, sh*s); }catch(_){ /* unreadable frame: keep the dark backdrop */ }
 }
 function drawReserved(ctx,x,y,w,h,spec,accent,active){
   ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);
@@ -544,7 +541,7 @@ function drawMedia(t,ctx,x,y,w,h,spec,active){
   if(vid){
     // video : cadre sombre = rectangle exact de la video (letterbox inutile, ratio respecte)
     ctx.fillStyle = "#0c0c0e"; ctx.fillRect(box.x, box.y, box.w, box.h);
-    try{ ctx.drawImage(vid, box.x, box.y, box.w, box.h); }catch(_){}
+    try{ ctx.drawImage(vid, box.x, box.y, box.w, box.h); }catch(_){ /* video not ready yet */ }
   } else {
     rr(ctx,x,y,w,h,10); ctx.save(); ctx.clip();
     try{
@@ -698,7 +695,7 @@ function drawBackCore(t, active){
 
   const cream = "#efe9dc", dim = "#8b8577", accent = p.accent;
   const serif = (w,px) => `${w} ${px}px "Playfair Display", Georgia, serif`;
-  const seamX = 1216, cxm = 630;
+  const seamX = 1216;
 
   ctx.fillStyle = accent; ctx.fillRect(0,0,9,H);
   ctx.fillStyle = hexA(accent,.4); ctx.fillRect(W-9,0,9,H);
@@ -804,7 +801,7 @@ function paintFallback(t, front){
     ctx.font = "600 26px Archivo, Arial, sans-serif";
     ctx.fillStyle = dim; ctx.fillText((t.p.domain || "").toUpperCase() + " - " + t.p.id, PW/2, PH/2 + 30);
     tex.needsUpdate = true;
-  }catch(_){}
+  }catch(_){ /* last-resort fallback: nothing more to try */ }
 }
 function canvasOpaque(ctx){
   try{
@@ -850,7 +847,7 @@ let boothClock = null;                        // groupe de l'horloge (reposition
 let boothCesar = null;                        // statuette CESAR posee sur le comptoir (repositionnee a droite de l'affiche rouge)
 let boothOscar = null;                        // statuette OSCAR posee juste a cote du Cesar, sur le comptoir
 let boothTarifs = null;                       // pancarte des tarifs (chevalet sur le comptoir, repositionne par placeTarifs)
-let awardTaken = null, awardHover = null, awardDrag = false;   // trophee en main / survolee / en train d'etre tourne au pointeur
+let awardTaken = null, awardDrag = false;   // trophee en main / en train d'etre tourne au pointeur
 let awardNext = null;   // prise en attente : la statuette en main se RANGE d'abord, puis celle-ci monte
 let tickets = [], hovered = null, dragging = false, lastDrag = null;
 let heroActive = false, detailOpen = false, shake = 0;
@@ -1705,7 +1702,6 @@ function makeCesarStatue(title, sub){
   const noir = new THREE.MeshPhysicalMaterial({
     color:0x0a0a0c, metalness:.32, roughness:.27, clearcoat:1, clearcoatRoughness:.18, envMapIntensity:.85
   });
-  const P2 = (x,y) => new THREE.Vector2(x,y);
 
   /* --- socle noir : 8,8 cm (8 x 8 cm reels), angles francs, platine en retrait + plaque gravee --- */
   const BS = .088, BH = .020;
@@ -2258,7 +2254,6 @@ function showHero(i, instant, dir){
   updateProjectListActive();
   measureHeroZone();                   // le billet en main : la zone libre qui l'accueille
   layoutProjectList();                 // le billet en main occupe le centre : la plaque descend sous lui
-  if(!instant) { /* sound removed */ }
 }
 
 /* Repos : aucun billet en main, la pile reste posee sur le comptoir. */
@@ -2274,7 +2269,6 @@ function toPile(instant){
   updateProjectListActive();
   measureHeroZone();                   // plus de billet en main : la zone libre change
   layoutProjectList();                 // plus de billet en main : la plaque peut remonter sur le bois
-  if(!instant) { /* sound removed */ }
 }
 
 /* ================== Etat du guichet : rideau ouvert / ferme ==================
@@ -2481,7 +2475,6 @@ function toggleCurtains(){
   } else {
     syncHandUI();
   }
-  /* sound removed */
 }
 /* Eclairage : guichet ferme -> tout s'eteint SAUF la cloche ; la pile n'est plus mise en avant. */
 function applyCurtainLighting(){
@@ -3056,19 +3049,18 @@ function awardRoot(obj){                                 // remonte du mesh perc
 }
 function takeAward(g){
   if(!g || awardTaken === g) return;
-  awardTaken = g; awardDrag = false; awardNext = null; /* sound removed */
+  awardTaken = g; awardDrag = false; awardNext = null;
   g.userData.dy = g.userData.dx = g.userData.dyc = g.userData.dxc = 0;  // prise toujours a nouveau tout droit
 }
 function putAward(){
   awardNext = null;                       // on repose aussi la prise eventuellement en attente
   if(!awardTaken) return;
   awardTaken.userData.dy = awardTaken.userData.dx = 0;  // il se redresse en rejoignant le comptoir
-  awardTaken = null; awardDrag = false; /* sound removed */
+  awardTaken = null; awardDrag = false;
 }
 function hoverTicket(t){
   if(hovered === t) return;
   hovered = t;
-  /* sound removed */
 }
 function doStamp(){
   if(stampingLock || openPanel || detailOpen || boothsClosed || !tickets.length) return;
@@ -3078,14 +3070,13 @@ function doStamp(){
   if(hovered === t) hovered = null;
   // 0) on remet d'abord le billet droit, face a nous, puis on tamponne
   t.dragY = 0; t.dragX = 0;
-  /* sound removed */
   let waited = 0;
   const stampWhenStraight = () => {
     waited += 90;
     const straight = Math.abs(t.dragYc) < .02 && Math.abs(t.dragXc) < .02;
     if(!straight && waited < 640){ setTimeout(stampWhenStraight, 90); return; }
     // 1) le billet est droit : le tampon tombe dessus, qui reste en grand au premier plan
-    /* sound removed */ shake = .45;
+    shake = .45;
     t.stampAnim = 0.0001; t.stamping = true;
     // 2) une fois tamponne, le billet part dans le fond (il rejoint le rang)
     setTimeout(() => {
@@ -3155,7 +3146,6 @@ function onPointerMove(e){
     lastDrag = {x:e.clientX, y:e.clientY};
     const t = tickets[heroIdx]; if(!t) return;
     t.dragY += dx*.009; t.dragX = clamp(t.dragX + dy*.008, -.4, .4);
-    if(Math.abs(dx) > 1 || Math.abs(dy) > 1) { /* sound removed */ }
     return;
   }
   if(awardDrag && lastDrag){    // trophee en main : glisser = le tourner, comme un billet
@@ -3165,7 +3155,6 @@ function onPointerMove(e){
     if(g){
       g.userData.dy += dx*.009;                       // horizontal -> rotation lente sur l'axe
       g.userData.dx = clamp(g.userData.dx + dy*.008, -.4, .4);   // vertical -> inclinaison
-      if(Math.abs(dx) > 1 || Math.abs(dy) > 1) { /* sound removed */ }
     }
     return;
   }
@@ -3177,7 +3166,6 @@ function onPointerMove(e){
     stage.style.cursor = pickBell(px,py) ? "pointer" : "";
     if(hovered){ hovered = null; }
     pileHover = null;
-    awardHover = null;
     return;
   }
   if(heroIdx < 0){                       // pile au repos : on survole la pile, la cloche, les trophees ou les billets tamponnes
@@ -3185,10 +3173,8 @@ function onPointerMove(e){
     const aw = awardRoot(pickAward(px,py));            // trophees cliquables (prise " comme un billet ")
     if(aw){
       stage.style.cursor = "pointer"; pileHover = null; hoverTicket(null);
-      if(awardHover !== aw){ awardHover = aw; /* sound removed */ }
       return;
     }
-    awardHover = null;
     const pinned = pickTicket(px,py);
     const p = pinned ? null : pickPile(px,py);
     pileHover = p;
@@ -3196,10 +3182,10 @@ function onPointerMove(e){
     hoverTicket(pinned);
     return;
   }
-  awardHover = null;   // billet en main : les trophees ne repondent pas
+  // billet en main : les trophees ne repondent pas
   const hitH = pickHero(px,py);
   if(hitH){
-    if(hovered !== hitH){ hovered = hitH; /* sound removed */ }
+    hovered = hitH;
     stage.style.cursor = "grab";
     return;
   }
@@ -3261,9 +3247,9 @@ function onPointerDown(e){
   if(stage) stage.style.cursor = "";
   if(awardTaken){               // trophee en main : clic dessus = on le saisit pour le tourner, ailleurs = repos
     const a = awardRoot(pickAward(px,py));
-    if(a === awardTaken){ awardDrag = true; /* sound removed */ return; }
+    if(a === awardTaken){ awardDrag = true; return; }
     if(a){                       // changement de statuette : on RANGE d'abord celle en main...
-      putAward();                // ...elle regagne le comptoir (snd.put + descente)...
+      putAward();                // ...elle regagne le comptoir (put-down + descent)...
       awardNext = a;             // ...et celle-ci ne monte QU'UNE FOIS l'autre posee
       return;
     }
@@ -3280,7 +3266,7 @@ function onPointerDown(e){
     // ... sinon on poursuit normalement (pile / billet epingle) : le clic n'est pas perdu
   }
   if(pickHero(px,py)){          // on saisit le billet en main (on peut le tourner)
-    dragging = true; /* sound removed */
+    dragging = true;
     return;
   }
   const t = pickTicket(px,py);     // un billet deja tamponne -> rouvre sa fiche
@@ -3844,7 +3830,6 @@ function openDetail(p){
   const back = detail.querySelector("[data-close]");
   if(back) back.focus();
   updateProjectListActive();
-  /* sound removed */
 }
 function closeDetail(){
   detailOpen = false;
@@ -3883,7 +3868,6 @@ function openPanelById(id){
   document.body.classList.add("panel-open");
   $$(".reveal", el).forEach(r => r.classList.add("in"));   // contenu deja revele
   if(id === "about") el.classList.add("skills-on");
-  /* sound removed */
 }
 function closePanel(){
   if(!openPanel) return;
@@ -3919,12 +3903,6 @@ function setMobileMenu(open, focusBack){
 /* ================== HUD classique (grain, timecode, reveal...) ================== */
 function initHud(){
   initPanels();
-
-  /* email CONFIG */
-  if(CONFIG.email && !CONFIG.email.includes("EMAIL.COM")){
-    const mb = $("#mailBtn"); if(mb){ mb.href = `mailto:${CONFIG.email}?subject=Project x ${encodeURIComponent(CONFIG.name)} - The Box Office`; }
-    const te = $("#ticketEmail"); if(te) te.textContent = CONFIG.email;
-  }
 
   /* grain : petit bitmap etire par le CSS (jamais plus d'un demi-ecran, et plafonne en
      pixels pour que le tirage aleatoire reste bon marche sur un grand ecran). */
@@ -3996,10 +3974,6 @@ function initHud(){
     new IntersectionObserver((es,o) => es.forEach(e => e.isIntersecting && (countUp(), o.disconnect())), {threshold:.3}).observe(skillsBox);
   }
 
-  /* bouton son */
-  const sb = $("#soundBtn");
-  if(sb){ sb.style.display = "none"; }
-
   /* menu mobile */
   $("#menuBtn").addEventListener("click", () => setMobileMenu(true));
   $("#menuClose").addEventListener("click", () => setMobileMenu(false, true));
@@ -4052,7 +4026,7 @@ async function fontsReady(){
       ]),
       new Promise(r => setTimeout(r, 6000)),      // garde-fou : CDN bloque, on n'attend pas indefiniment
     ]);
-  }catch(e){}
+  }catch(e){ /* fonts blocked: carry on with fallback fonts */ }
   fontsLoaded = true; updateLoaderProgress();
 }
 async function boot(){
