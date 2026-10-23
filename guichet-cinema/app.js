@@ -17,7 +17,7 @@ const CONFIG = {
    bibliotheque manque, on ne casse PAS tout le site pour autant : la liste des
    projets, le HUD, les fiches et le repli "noWebgl" (les six films en cartes)
    restent la. Seule la scene 3D disparait.
-   (three.min.js est livre en local dans assets/ ; le CDN reste en repli.) */
+   (Three.js vient du CDN ; sans lui, le repli "noWebgl" prend le relais.) */
 const HAS_THREE = (typeof THREE !== "undefined");
 /* Les " scratchs " 3D (vecteurs, matrices, rayon) ne servent QUE dans la scene :
    camera, boucle de rendu, projections. Si Three.js manque, ils ne sont jamais
@@ -1491,7 +1491,7 @@ function awardRoughTex(){
    statuettes sont CLICABLES (prises " comme un billet " pour etre contemplees).
    Echelle : 1 unite = 1 metre. Aucun facteur d'echelle : le Cesar mesure .292
    et l'Oscar .343 dans le monde, comme les vrais. */
-const AWARD_CAPSULE = !!(THREE.CapsuleGeometry);
+const AWARD_CAPSULE = HAS_THREE && !!(THREE.CapsuleGeometry);
 function awardCapGeo(r, len){
   return AWARD_CAPSULE
     ? new THREE.CapsuleGeometry(r, Math.max(.0008, len), 8, 20)
@@ -2508,11 +2508,11 @@ function applyCurtainLighting(){
    son papier et le billet s'allume (ses materiaux sont " non eclaires ", on monte donc
    leur couleur). Tout s'eteint quand le guichet est ferme (curtainT -> 1) ainsi que hors
    de la scene 3D (panneau ouvert, fiche film, scroll). */
-const CURSOR_ANG = .19, CURSOR_Z = new THREE.Vector3(0,0,1);      // axe local du plan de la tache
-const cursorSrc = new THREE.Vector3(), cursorDir = new THREE.Vector3();
-const cursorMid = new THREE.Vector3(), cursorNrm = new THREE.Vector3();
-const curV1 = new THREE.Vector3(), curV2 = new THREE.Vector3(), curV3 = new THREE.Vector3();
-const curBasis = new THREE.Matrix4(), curNmat = new THREE.Matrix3();
+const CURSOR_ANG = .19, CURSOR_Z = newV3(0,0,1);      // axe local du plan de la tache
+const cursorSrc = newV3(), cursorDir = newV3();
+const cursorMid = newV3(), cursorNrm = newV3();
+const curV1 = newV3(), curV2 = newV3(), curV3 = newV3();
+const curBasis = newM4(), curNmat = newM3();
 let litTicket = null;                                             // billet sous le curseur
 const ticketMeshes = [];                                          // (rempli une fois la scene batie)
 
@@ -2810,7 +2810,7 @@ const FACADE_TOP_Y = -.22;      // sous le rebord avant du plan de travail
 const FACADE_BOT_Y = -2.90;     // bas de la devanture, juste au-dessus de la plinthe
 const LF_GAP = 14;              // px : marge entre la plaque et ce qu'elle touche
 const LF_MIN_H = 64;            // px : hauteur minimale du panneau sur la devanture
-const facadeV = new THREE.Vector3();
+const facadeV = newV3();
 let listFacade = false;         // la liste est-elle posee sur la devanture ?
 let listRect = null;            // dernier rectangle applique (px ecran)
 let listBarH = 56;              // px : hauteur de la bande noire du bas
@@ -3113,7 +3113,7 @@ function doStamp(){
    premiere ; cette tolerance (un rayon de TAP_RADIUS_PX pixels autour du CENTRE de
    l'objet) ne sert QUE si le rayon n'a rien touche. Sur un ecran large elle ne sert
    jamais : les objets y sont grands. */
-const nearNdc = new THREE.Vector3();
+const nearNdc = newV3();
 function objectNdcPos(obj, out){
   obj.updateWorldMatrix(true, false);
   return out.setFromMatrixPosition(obj.matrixWorld).project(camera);
@@ -3507,7 +3507,7 @@ function measureHeroZone(){
 /* Un point ECRAN (px) -> la position MONDE qui s'y projette, sur le plan z du
    billet. Exact : on passe par le repere de la camera, puis on intersecte le
    rayon avec le plan du billet. La perspective est donc respectee au pixel pres. */
-const heroRay = new THREE.Vector3();
+const heroRay = newV3();
 function worldAtScreen(px, py, zPlane){
   const v = viewSize();
   const tanY = Math.tan(camera.fov*Math.PI/360), tanX = tanY*camera.aspect;
@@ -3517,7 +3517,7 @@ function worldAtScreen(px, py, zPlane){
   return {x: camera.position.x + heroRay.x*k, y: camera.position.y + heroRay.y*k, z: zPlane};
 }
 /* L'inverse : une position monde -> sa place a l'ecran (px). */
-const heroTmp = new THREE.Vector3();
+const heroTmp = newV3();
 function screenAtWorld(x, y, z){
   const v = viewSize();
   heroTmp.set(x,y,z).project(camera);
