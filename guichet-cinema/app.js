@@ -596,23 +596,24 @@ function drawFrontCore(t, active){
 
   // --- titre du film (impression letterpress : double passe) ---
   ctx.font = serif(400,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
-  ctx.fillText("PRESENTS", cxm, 190);
+  ctx.fillText("PRESENTS", cxm, 164);
   ctx.font = serif(700,88); ctx.textBaseline = "alphabetic";
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1060);
-  let ty = 268;
+  let ty = 238;
   tl.slice(0,2).forEach(l => {
     ctx.fillStyle = "rgba(46,37,24,.30)"; ctx.fillText(l, cxm+2.5, ty+3);   // passe en creux
     ctx.fillStyle = ink; ctx.fillText(l, cxm, ty);
     ty += 80;
   });
+  ty -= 52;                                   // trait juste sous la derniere ligne du titre
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(cxm-170, ty); ctx.lineTo(cxm+170, ty); ctx.stroke();
   ctx.font = serif(700,21); ctx.fillStyle = accent;
   const dl = wrapLines(ctx, p.domain.toUpperCase(), 1060);
-  ctx.fillText(dl[0]||"", cxm, ty+40);
+  ctx.fillText(dl[0]||"", cxm, ty+34);
 
   // --- photo facon " carte de lobby " (grand format) ---
-  const my = Math.min(ty + 60, 480), mh = 746 - my, mx = 70, mw = seamX - mx - 30;
+  const my = Math.min(ty + 66, 440), mh = 760 - my, mx = 60, mw = seamX - mx - 26;
   const box = drawMedia(t, ctx, mx, my, mw, mh, p.front, active);   // rectangle REEL du media
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.4;
   rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();      // double cadre
@@ -712,7 +713,7 @@ function drawBackCore(t, active){
   // --- titre + tagline ---
   ctx.font = serif(700,58); ctx.fillStyle = cream;
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1040);
-  let ty = 224;
+  let ty = 196;
   tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 60; });
   ctx.font = fQuoteFont(26); ctx.fillStyle = accent;
   const ql = wrapLines(ctx, p.tagline, 1000);
@@ -720,7 +721,7 @@ function drawBackCore(t, active){
   ql.slice(0,2).forEach(l => { ctx.fillText(l,58,qy); qy += 31; });
 
   // --- media verso (grand format) ---
-  const my = Math.min(qy + 16, 400), mh = 632 - my, mx = 58, mw = seamX - mx - 30;
+  const my = Math.min(qy + 16, 400), mh = 632 - my, mx = 58, mw = seamX - mx - 24;
   const box = drawMedia(t, ctx, mx, my, mw, mh, p.back, active);   // rectangle REEL du media
   ctx.strokeStyle = "rgba(239,233,220,.35)"; ctx.lineWidth = 1.4;
   rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();
@@ -3213,7 +3214,7 @@ function onPointerMove(e){
      - avec un geste de biais -> il faut une nette dominante verticale.
    Renvoie 0 (pas un swipe), 1 (suivant) ou -1 (precedent).
    Fonction PURE (aucun etat) : la regle se verifie toute seule, hors scene. */
-const SWIPE_MIN_FRAC = .14, SWIPE_MIN_PX = 44, SWIPE_MAX_PX = 120;   // seuil de deplacement
+const SWIPE_MIN_FRAC = .20, SWIPE_MIN_PX = 64, SWIPE_MAX_PX = 160;   // seuil de deplacement (augmente = moins sensible)
 function swipeDir(dx, dy, dt, h){
   const minDy = clamp(h*SWIPE_MIN_FRAC, SWIPE_MIN_PX, SWIPE_MAX_PX); // proportionnel a la hauteur d'ecran
   const adx = Math.abs(dx), ady = Math.abs(dy);
@@ -3350,6 +3351,12 @@ function onKeyDown(e){
     if(e.key === "ArrowDown"  || e.key === "ArrowLeft")  browseTickets(-1);
   }
 }
+/* Sensibilite de la molette / du pave tactile (augmente = MOINS sensible) :
+   WHEEL_THRESHOLD : defilement cumule (px) necessaire pour changer de billet
+   WHEEL_COOLDOWN  : pause minimale (ms) apres un changement
+   WHEEL_QUIET     : tant que la molette / l'inertie du pave continue, la pause est
+                     prolongee ; il faut ce silence (ms) pour qu'un nouveau geste compte */
+const WHEEL_THRESHOLD = 500, WHEEL_COOLDOWN = 0, WHEEL_QUIET = 0;
 let wheelAcc = 0, wheelIdle = 0, wheelCool = 0;
 function onWheel(e){
   if(openPanel || detailOpen) return;   // laisse defiler le panneau / la fiche
@@ -3365,17 +3372,18 @@ function onWheel(e){
     putAward();
     return;
   }
-  if(Date.now() < wheelCool){            // un geste = un billet : on laisse le geste se terminer
+  if(Date.now() < wheelCool){            // un geste = un billet : on laisse le geste (et son inertie) se terminer
     wheelAcc = 0;
+    wheelCool = Math.max(wheelCool, Date.now() + WHEEL_QUIET);
     return;
   }
   wheelAcc += px;
   clearTimeout(wheelIdle);
   wheelIdle = setTimeout(() => { wheelAcc = 0; }, 140);   // on oublie quand on s'arrete
-  if(Math.abs(wheelAcc) < 200) return;                    // cran trop leger -> on ignore
+  if(Math.abs(wheelAcc) < WHEEL_THRESHOLD) return;           // cran trop leger -> on ignore
   const dir = px > 0 ? 1 : -1;                            // sens du defilement = sens du doigt
   wheelAcc = 0;
-  wheelCool = Date.now() + 360;                           // anti-repetition pendant un long defilement
+  wheelCool = Date.now() + WHEEL_COOLDOWN;                  // anti-repetition pendant un long defilement
 
   // meme navigation que le doigt : vers le bas / doigt vers le haut = billet suivant.
   // La carte survolee est privilegiee quand aucun billet n'est en main.
