@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LUDO LA BÊTE — Creative Technologist · Portfolio Cinéma</title>
+<meta name="description" content="Portfolio de Ludo La Bête, creative technologist passionné d'UX/UI et de cinéma. TeruBot, BreathIN, Kapsul, KeyMotion, AI Vision Lab, WeatherApp." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@1,400;1,500;1,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='68' font-size='60' text-anchor='middle' fill='%23efe9dc' font-family='Arial Black'>L</text></svg>" />
+</head>
+<body data-loading="true">
+
+<!-- ══════════ PRELOADER : amorce cinéma ══════════ -->
+<div id="loader" aria-hidden="true">
+  <div class="loader-frame">
+    <div class="loader-top"><span>PICTURE START</span><span>16 MM · SONORE</span></div>
+    <div class="loader-count" id="loaderCount">3</div>
+    <div class="loader-cross"></div>
+    <div class="loader-bottom"><span>LUDO LA BÊTE</span><span id="loaderPct">0%</span></div>
+  </div>
+</div>
+
+<!-- grain + letterbox -->
+<canvas id="grain"></canvas>
+<canvas id="dust"></canvas>
+<div class="site-sweep" aria-hidden="true"></div>
+<div class="cine-bar cine-bar--top"></div>
+<div class="cine-bar cine-bar--bottom"></div>
+<div id="cursor" aria-hidden="true"><span id="cursorLabel">VIEW</span></div>
+<div id="progressBar" aria-hidden="true"></div>
+
+<!-- ══════════ HEADER ══════════ -->
+<header id="siteHeader">
+  <a class="brand" href="#top" data-hover="HOME">
+    <span class="brand-mark">LLB</span>
+    <span class="brand-text">LUDO LA BÊTE <em>©2026</em></span>
+  </a>
+  <div class="header-tc" aria-hidden="true">
+    <span class="rec-dot"></span>
+    <span id="timecode">00:00:00:00</span>
+    <span class="tc-label">REC · 24 FPS</span>
+  </div>
+  <nav class="main-nav">
+    <a href="#work" data-hover="VOIR">WORK <sup>(06)</sup></a>
+    <a href="#about" data-hover="VOIR">ABOUT</a>
+    <a href="#contact" class="ticket-mini" data-hover="GO">ADMIT ONE 🎟</a>
+    <button id="menuBtn" aria-label="Menu">☰</button>
+  </nav>
+</header>
+
+<!-- menu mobile -->
+<div id="mobileMenu" aria-hidden="true">
+  <button id="menuClose" aria-label="Fermer">✕</button>
+  <a href="#work">WORK <sup>06</sup></a>
+  <a href="#about">ABOUT</a>
+  <a href="#reviews">REVIEWS</a>
+  <a href="#contact">CONTACT — ADMIT ONE</a>
+  <p>CREATIVE TECHNOLOGIST · UX/UI × CINÉMA × INTERACTION</p>
+</div>
+
+<main id="top">
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero" id="hero">
+    <div class="hero-sprockets hero-sprockets--top" aria-hidden="true"></div>
+    <div class="hero-bg" id="heroBg" aria-hidden="true">
+      <div class="hero-leak hero-leak--a"></div>
+      <div class="hero-leak hero-leak--b"></div>
+      <div class="hero-flicker" aria-hidden="true"></div>
+      <div class="hero-vignette"></div>
+      <div class="hero-lines"></div>
+    </div>
+
+    <p class="kicker reveal" data-delay="0"><span class="kicker-dot"></span> NOW SHOWING — PORTFOLIO INTERACTIF · SAISON 2025/2026</p>
+
+    <h1 class="hero-title" id="heroTitle">
+      <span class="line reveal" data-delay="80"><span>LUDO</span></span>
+      <span class="line line--outline reveal" data-delay="160"><span>LA BÊTE</span></span>
+      <span class="line line--small reveal" data-delay="240"><span>CREATIVE <em>TECHNOLOGIST</em> — UX/UI × CINÉMA</span></span>
+    </h1>
+
+    <div class="hero-meta reveal">
+      <div><label>DIRECTOR</label><strong>Ludo La Bête</strong></div>
+      <div><label>GENRE</label><strong>UX/UI · Interaction · Prototype</strong></div>
+      <div><label>YEAR</label><strong>2025 — 2026</strong></div>
+      <div><label>RUNTIME</label><strong>06 PROJETS · ∞ SCROLL</strong></div>
+      <div><label>FORMAT</label><strong>16:9 · STEREO · DRAG & SCROLL</strong></div>
+    </div>
+
+    <div class="hero-cta reveal">
+      <a href="#work" class="btn btn--play magnetic" data-hover="PLAY"><span class="play-tri">▶</span> PLAY SHOWREEL</a>
+      <a href="#contact" class="btn btn--ghost magnetic" data-hover="GO">ADMIT ONE — LET'S TALK</a>
+      <p class="hero-hint">▼ Scrolle jusqu'au hall · Clique sur une affiche pour entrer en salle ▼</p>
+    </div>
+
+    <div class="hero-bottom">
+      <div class="hero-scroll">SCROLL<span></span></div>
+      <p class="hero-quote">“Chaque interface est une mise en scène. Chaque interaction, un plan-séquence.”</p>
+      <p class="hero-ticket">SIENA INSPIRÉ · TICKET Nº 004 · <a href="https://github.com/Lvdoo" target="_blank" rel="noopener">GITHUB.COM/LVDOO</a></p>
+    </div>
+    <div class="hero-sprockets hero-sprockets--bottom" aria-hidden="true"></div>
+  </section>
+
+  <!-- marquee -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-inner" id="marqueeInner">
+      <span>TERUBOT ✦ BREATHIN ✦ KAPSUL ✦ KEYMOTION ✦ AI VISION LAB ✦ WEATHERAPP ✦ UX/UI ✦ CREATIVE TECH ✦ CINÉMA ✦&nbsp;</span>
+      <span>TERUBOT ✦ BREATHIN ✦ KAPSUL ✦ KEYMOTION ✦ AI VISION LAB ✦ WEATHERAPP ✦ UX/UI ✦ CREATIVE TECH ✦ CINÉMA ✦&nbsp;</span>
+    </div>
+  </div>
+
+  <!-- ══════════ WORK / FILMS ══════════ -->
+  <section id="work" class="work">
+    <div class="hall-reel" aria-hidden="true"></div>
+    <div class="hall-strip" aria-hidden="true"></div>
+    <div class="section-head reveal" data-split>
+      <p class="section-index">01 — HALL DU CINÉMA · 6 SÉANCES</p>
+      <h2>À L'<em>AFFICHE</em> <span>/ PROJETS</span></h2>
+      <p class="section-sub">6 projets, 6 salles, 6 genres. Chaque fiche est une affiche — <strong>clique pour entrer en salle</strong> : actes, coulisses, médias, générique.</p>
+    </div>
+
+    <div class="prog-list" id="progList">
+
+        <!-- 001 TERUBOT -->
+        <article class="prog-card reveal" data-film="terubot" data-cursor="VIEW" data-title="TERUBOT" data-accent="#e03131">
+          <div class="film-poster poster--terubot">
+            <video class="poster-video" src="assets/terubot-demo.mp4" muted loop playsinline preload="metadata"></video>
+            <div class="poster-shade"></div>
+            <span class="poster-num">001</span>
+            <span class="poster-cat">ROBOTIQUE SOCIALE · INSTALLATION</span>
+            <h3>TERU<br>BOT</h3>
+            <p class="poster-tagline">“L'ambiance d'un groupe, sculptée en lumière.”</p>
+          </div>
+          <div class="film-info">
+            <h4>TeruBot</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>Interaction · Proto · Code</dd></div>
+              <div><dt>YEAR</dt><dd>2025</dd></div>
+              <div><dt>STACK</dt><dd>Capteurs · Arduino/KiCad · UX temps réel</dd></div>
+            </dl>
+            <p class="film-syn">Le robot qui rend l'humeur d'un groupe visible par tous.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="terubot" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <a class="link-arrow" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">GITHUB ↗</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 002 BREATHIN -->
+        <article class="prog-card reveal" data-film="breathin" data-cursor="BREATHE" data-title="BREATHIN" data-accent="#7fb4ff">
+          <div class="film-poster poster--breathin">
+            <img src="assets/breathin-1.png" alt="BreathIN — scène Unity : robot sous cerisier en fleurs" loading="lazy" />
+            <div class="poster-shade"></div>
+            <span class="poster-num">002</span>
+            <span class="poster-cat">RESPIRATION · UNITY · WELLBEING</span>
+            <h3>BREATH<br>IN</h3>
+            <p class="poster-tagline">“Inspire. Expire. Le décor respire avec toi.”</p>
+          </div>
+          <div class="film-info">
+            <h4>BreathIN</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>Interaction Design · Unity 6.2</dd></div>
+              <div><dt>YEAR</dt><dd>2026</dd></div>
+              <div><dt>STACK</dt><dd>Unity · C# · Particules · Sound design</dd></div>
+            </dl>
+            <p class="film-syn">Un monde Unity qui respire avec toi.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="breathin" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <span class="link-arrow" data-hover="IMG">2 STILLS UNITY ↓</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 003 KAPSUL -->
+        <article class="prog-card reveal" data-film="kapsul" data-cursor="BACK IT" data-title="KAPSUL" data-accent="#d4a373">
+          <div class="film-poster poster--kapsul">
+            <div class="poster-shade"></div>
+            <span class="poster-num">003</span>
+            <span class="poster-cat">PRODUIT · KICKSTARTER · BRANDING</span>
+            <h3>KAP<br>SUL</h3>
+            <p class="poster-tagline">“D'une idée à une campagne qui décolle.”</p>
+            <span class="poster-soon">VISUEL PHOTO À VENIR · 16:10</span>
+            <div class="kapsul-shape" aria-hidden="true"><i></i></div>
+          </div>
+          <div class="film-info">
+            <h4>Kapsul / Kickstarter</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>Product Design · Identité · Proto</dd></div>
+              <div><dt>YEAR</dt><dd>2025</dd></div>
+              <div><dt>STACK</dt><dd>Prototypage · DA · Crowdfunding</dd></div>
+            </dl>
+            <p class="film-syn">D'une idée à un produit prêt pour Kickstarter.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="kapsul" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <a class="link-arrow" href="#contact" data-hover="GO">PITCH ME ↗</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 004 KEYMOTION -->
+        <article class="prog-card reveal" data-film="keymotion" data-cursor="WAVE" data-title="KEYMOTION" data-accent="#8f9bff">
+          <div class="film-poster poster--keymotion">
+            <div class="hand-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="poster-shade"></div>
+            <span class="poster-num">004</span>
+            <span class="poster-cat">GESTURE · PYTHON + UNITY</span>
+            <h3>KEY<br>MOTION</h3>
+            <p class="poster-tagline">“Tes mains deviennent la télécommande.”</p>
+            <span class="poster-soon">VISUEL PHOTO À VENIR · 16:10</span>
+          </div>
+          <div class="film-info">
+            <h4>KeyMotion</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>Computer Vision · Dev</dd></div>
+              <div><dt>YEAR</dt><dd>2025</dd></div>
+              <div><dt>STACK</dt><dd>Python · MediaPipe · Unity · ShaderLab</dd></div>
+            </dl>
+            <p class="film-syn">Tes mains pilotent le son et la lumière.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="keymotion" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <a class="link-arrow" href="https://github.com/Lvdoo/KeyMotion" target="_blank" rel="noopener" data-hover="GO">REPO ↗</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 005 AI VISION LAB -->
+        <article class="prog-card reveal" data-film="vision" data-cursor="SCAN" data-title="NEURAL VISION" data-accent="#c77dff">
+          <div class="film-poster poster--vision">
+            <div class="digits" aria-hidden="true"><span>3</span><span>7</span><span>9</span><span>2</span></div>
+            <div class="poster-shade"></div>
+            <span class="poster-num">005</span>
+            <span class="poster-cat">AI · COMPUTER VISION</span>
+            <h3>NEURAL<br>VISION</h3>
+            <p class="poster-tagline">“La machine apprend à lire ta main.”</p>
+            <span class="poster-soon">VISUEL PHOTO À VENIR · 16:10</span>
+          </div>
+          <div class="film-info">
+            <h4>AI Vision Lab</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>ML · Python · UX d'entraînement</dd></div>
+              <div><dt>YEAR</dt><dd>2024 — 2025</dd></div>
+              <div><dt>STACK</dt><dd>Python · CNN · OpenCV</dd></div>
+            </dl>
+            <p class="film-syn">Trois IA qui apprennent à lire l'écriture.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="vision" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <a class="link-arrow" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">3 REPOS ↗</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- 006 WEATHERAPP -->
+        <article class="prog-card reveal" data-film="weather" data-cursor="RAIN" data-title="WEATHER" data-accent="#ffd166">
+          <div class="film-poster poster--weather">
+            <div class="sun" aria-hidden="true"></div>
+            <div class="poster-shade"></div>
+            <span class="poster-num">006</span>
+            <span class="poster-cat">APP · UX/UI · API</span>
+            <h3>WEA<br>THER</h3>
+            <p class="poster-tagline">“Le temps qu'il fait, sans friction.”</p>
+            <span class="poster-soon">VISUEL PHOTO À VENIR · 16:10</span>
+          </div>
+          <div class="film-info">
+            <h4>WeatherApp</h4>
+            <dl>
+              <div><dt>ROLE</dt><dd>Design + Dev Python</dd></div>
+              <div><dt>YEAR</dt><dd>2024</dd></div>
+              <div><dt>STACK</dt><dd>Python · Tkinter · OpenWeatherMap</dd></div>
+            </dl>
+            <p class="film-syn">La météo essentielle, sans friction.</p>
+            <div class="film-actions">
+              <button class="btn btn--small" data-open="weather" data-hover="OPEN">ENTRER EN SALLE →</button>
+              <a class="link-arrow" href="https://github.com/Lvdoo/WeatherApp" target="_blank" rel="noopener" data-hover="GO">REPO ↗</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- carte FIN -->
+        <article class="prog-card prog-card--end reveal">
+          <div class="end-card">
+            <p>FIN ?</p>
+            <h3>TON<br>PROJET<br>ICI<span>.</span></h3>
+            <a href="#contact" class="btn magnetic" data-hover="GO">LET'S TALK →</a>
+            <small>*Durées fictives — clin d'œil à siena.film</small>
+          </div>
+        </article>
+
+    </div><!-- /prog-list -->
+    <div class="hall-strip hall-strip--bottom" aria-hidden="true"></div>
+
+    <!-- stills BreathIN -->
+    <div class="stills reveal">
+      <div class="stills-head"><h3>BREATHIN — STILLS UNITY</h3><p>Captures du dossier Test · SampleScene Unity 6.2</p></div>
+      <div class="stills-grid">
+        <figure class="reveal" data-delay="0"><img src="assets/breathin-1.png" alt="BreathIN still 1" loading="lazy"><figcaption>SC.01 — LE CERISIER / RESPIRATION GUIDÉE</figcaption></figure>
+        <figure class="reveal" data-delay="120"><img src="assets/breathin-2.png" alt="BreathIN still 2" loading="lazy"><figcaption>SC.02 — TRAVERSÉE / COHÉRENCE</figcaption></figure>
+        <figure class="stills-video reveal" data-delay="240"><video src="assets/terubot-demo.mp4" controls muted loop playsinline preload="metadata"></video><figcaption>SC.03 — TERUBOT / DÉMO ATELIER (dossier Test)</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ ABOUT ══════════ -->
+  <section id="about" class="about">
+    <div class="section-head reveal" data-split>
+      <p class="section-index">02 — DIRECTOR'S CUT</p>
+      <h2>ABOUT <em>LUDO</em></h2>
+      <p class="section-sub">Étudiant en créative technologique. Passion UX/UI, obsédé cinéma. Je designe des interactions comme on cadre des plans.</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-bio reveal">
+        <p class="dropcap">Moi c'est <strong>Ludo La Bête</strong> — je prototype vite, je teste avec des humains, je filme tout. Mon terrain de jeu : là où le <strong>design d'interaction</strong> rencontre la <strong>narration cinématographique</strong>.</p>
+        <p>Robotique sociale <b>(TeruBot)</b>, bien-être immersif <b>(BreathIN)</b>, produit crowdfundé <b>(Kapsul)</b>, vision par ordinateur et gestes <b>(KeyMotion, Vision Lab)</b>, apps sobres <b>(WeatherApp)</b> : j'aime passer du capteur au pixel, du PCB KiCad au design system.</p>
+        <div class="about-badges">
+          <span>◉ DISPO STAGE / PROJET</span><span>◉ BASE : FRANCE · REMOTE OK</span><span>◉ FR / EN</span>
+        </div>
+        <div class="about-links">
+          <a class="btn btn--small magnetic" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">★ GITHUB.COM/LVDOO</a>
+          <a class="btn btn--small btn--ghost magnetic" href="#contact" data-hover="GO">ME CONTACTER →</a>
+        </div>
+      </div>
+      <div class="about-skills reveal">
+        <h3>COMPÉTENCES — GÉNÉRIQUE</h3>
+        <ul class="skill-list">
+          <li><span>UX / UI Design</span><i style="--v:92%"><b data-count="92">0</b></i></li>
+          <li><span>Interaction & Prototypage</span><i style="--v:88%"><b data-count="88">0</b></i></li>
+          <li><span>Unity / C# / Temps réel</span><i style="--v:80%"><b data-count="80">0</b></i></li>
+          <li><span>Python / AI / Vision</span><i style="--v:84%"><b data-count="84">0</b></i></li>
+          <li><span>Électronique / KiCad</span><i style="--v:70%"><b data-count="70">0</b></i></li>
+          <li><span>Direction artistique ciné</span><i style="--v:95%"><b data-count="95">0</b></i></li>
+        </ul>
+        <div class="chips">
+          <span>Figma</span><span>Unity 6</span><span>Python</span><span>MediaPipe</span><span>OpenCV</span><span>Tkinter</span><span>Arduino</span><span>KiCad</span><span>HTML/CSS/JS</span><span>Blender</span><span>Premiere</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ REVIEWS ══════════ -->
+  <section id="reviews" class="reviews">
+    <div class="section-head reveal" data-split>
+      <p class="section-index">03 — CRITICAL ACCLAIM*</p>
+      <h2>PRESS <em>& FRIENDS</em></h2>
+    </div>
+    <div class="reviews-grid">
+      <blockquote class="reveal" data-delay="0"><div class="stars">★★★★★</div><p>“Fast-paced and engrossing — il cadre ses interfaces comme des trailers.”</p><cite>— CAMARADE DE PROMO, CRÉATIVE TECHNO</cite></blockquote>
+      <blockquote class="reveal" data-delay="120"><div class="stars">★★★★★</div><p>“Breathtaking prototyping. Du capteur au premier test utile en une semaine.”</p><cite>— MENTOR ATELIER ROBOTIQUE</cite></blockquote>
+      <blockquote class="reveal" data-delay="240"><div class="stars">★★★★★</div><p>“Brave, poetic, liberated — TeruBot rend les émotions lisibles par tous.”</p><cite>— PUBLIC TEST UTILISATEURS</cite></blockquote>
+    </div>
+    <p class="reviews-note">*Citations d'ambiance, style siena.film — remplace-les par tes vrais retours quand tu veux.</p>
+  </section>
+
+  <!-- ══════════ CONTACT / TICKET ══════════ -->
+  <section id="contact" class="contact">
+    <div class="section-head reveal" data-split>
+      <p class="section-index">04 — BOX OFFICE</p>
+      <h2>LET'S <em>TALK</em></h2>
+      <p class="section-sub">Un stage, un projet, un court-métrage interactif ? Prends ton ticket.</p>
+    </div>
+    <div class="ticket reveal" id="ticket">
+      <div class="ticket-left">
+        <p class="ticket-brand">LLB PICTURES</p>
+        <h3>ADMIT ONE</h3>
+        <p class="ticket-num">Nº 004 · RANG UX · SIÈGE CINÉ</p>
+        <div class="ticket-meta">
+          <div><label>TO</label><strong id="ticketEmail">LUDO.CREATIVE@EMAIL.COM</strong></div>
+          <div><label>GITHUB</label><strong><a href="https://github.com/Lvdoo" target="_blank" rel="noopener">github.com/Lvdoo</a></strong></div>
+        </div>
+        <p class="ticket-note">✎ Dis-moi ton email et je remplace le placeholder en 10 secondes (voir README / CONFIG en haut de app.js).</p>
+      </div>
+      <div class="ticket-perfo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="ticket-right">
+        <p>SCAN · WRITE</p>
+        <a class="btn magnetic" id="mailBtn" href="mailto:LUDO.CREATIVE@EMAIL.COM?subject=Projet%20x%20Ludo%20—%20Let%27s%20talk" data-hover="SEND">EMAIL US →</a>
+        <a class="btn btn--ghost magnetic" href="https://github.com/Lvdoo" target="_blank" rel="noopener" data-hover="GO">GITHUB ↗</a>
+        <div class="ticket-qr" aria-hidden="true">LUDO<br>★★★★★<br>2026</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-top">
+      <span>LLB — SIENA INSPIRÉ</span><span>WORK · ABOUT · CONTACT</span><span>© 2026 LUDO LA BÊTE</span>
+    </div>
+    <p class="footer-credits">DIRECTOR L. LA BÊTE · DOP BROWSER · MUSIC GRAIN 35MM · FONTS ANTON/ARCHIVO · CODE HANDMADE · “HOLD AND DRAG TO NAVIGATE” · FIN.</p>
+    <a href="#top" class="to-top magnetic" data-hover="TOP">↑ BACK TO OPENING CREDITS</a>
+  </footer>
+</main>
+
+<!-- ══════════ SALLE DE PROJECTION ══════════ -->
+<div id="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Salle de projection">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel salle" id="sallePanel">
+    <div class="salle-top">
+      <span id="mRoom">SALLE 01 ● PROJECTION</span>
+      <button class="modal-close" data-close aria-label="Sortir de la salle">✕ SORTIR</button>
+    </div>
+    <p class="modal-kicker" id="mKicker">SÉANCE — 001</p>
+    <h3 id="mTitle">TeruBot</h3>
+    <p class="modal-headline" id="mHeadline"></p>
+    <div class="salle-screen" id="salleScreen"><div class="salle-media" id="mMedia"></div></div>
+    <div class="modal-meta" id="mMeta"></div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-foot">
+      <a class="btn btn--small" id="mLink" href="https://github.com/Lvdoo" target="_blank" rel="noopener">VOIR SUR GITHUB ↗</a>
+      <button class="btn btn--small" id="mNext" data-hover="NEXT">FILM SUIVANT →</button>
+      <button class="btn btn--small btn--ghost" data-close>← RETOUR AU HALL</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

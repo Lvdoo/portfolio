@@ -37,7 +37,7 @@ const PROJECTS = [
     genre:"Ensemble film - soft sci-fi", duration:"77 MIN", seance:"SHOWTIME 9:00 PM",
     tools:["Arduino","KiCad","Sensors","Realtime"],
     front:{src:"assets/terubot-demo.mp4", cap:"TRAILER - WORKSHOP DEMO"},
-    back:{src:"assets/terubot-demo.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
+    back:{src:"assets/Terubot-2.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
     tagline:"The robot that makes a group's mood visible to everyone.",
     blurb:"TeruBot turns a group's emotions into a physical, interactive representation. Inspired by the Japanese Teru Teru Bozu, it visualises the collective emotional mood in a simple, playful and intuitive way.",
     headline:"'A film about collective emotions'",
@@ -70,8 +70,8 @@ const PROJECTS = [
     domain:"Product - Kickstarter - Launch", year:"2025", role:"Prototyping - Web - Launch",
     genre:"Product blockbuster - launch trailer", duration:"93 MIN", seance:"SHOWTIME 8:00 PM",
     tools:["Prototyping","Art Direction","Crowdfunding"],
-    front:{src:"assets/kapsul-1.png", cap:"PROTOTYPE IN CONTEXT"},
-    back:{src:"assets/kapsul-2.png", cap:"KICKSTARTER PAGE"},
+    front:{src:"assets/Kapsul-1.png", cap:"PROTOTYPE IN CONTEXT"},
+    back:{src:"assets/Kapsul-2.mp4", cap:"KAPSUL PHOTO"},
     tagline:"From an idea to a campaign that takes off.",
     blurb:"Kapsul turns a product idea into a concrete, marketable project: concept, prototyping, product design and an identity built for a crowdfunding launch.",
     headline:"'Groundbreaking product cinema'",
@@ -99,11 +99,11 @@ const PROJECTS = [
   },
   {
     id:"vision", num:"005", title:"Neural Vision", accent:"#8e44d8",
-    domain:"AI - Computer Vision", year:"2024 - 2025", role:"ML - Python",
+    domain:"AI - Computer Vision", year:"2026", role:"ML - Python",
     genre:"Found footage - AI archives", duration:"88 MIN", seance:"SHOWTIME 7:00 PM",
     tools:["Python","CNN","OpenCV"],
-    front:{src:"assets/vision-1.png", cap:"MODEL TRAINING"},
-    back:{src:"assets/vision-2.png", cap:"HANDWRITING"},
+    front:{src:"assets/Vision-1.mp4", cap:"MODEL TRAINING"},
+    back:{src:"assets/Vision-2.mp4", cap:"HANDWRITING"},
     tagline:"The machine learns to read your hand.",
     blurb:"A triptych of visual recognition: drawn digits, handwritten text, multi-number detection. Three repos, one obsession - making AI readable for a human.",
     headline:"'A fascinating voyage into ML'",
@@ -115,17 +115,27 @@ const PROJECTS = [
   },
   {
     id:"weather", num:"006", title:"WeatherApp", accent:"#2f9e44",
-    domain:"App - Python - API", year:"2024", role:"Dev - Python - API",
+    domain:"Desktop tool - Weather data", year:"2024", role:"GUI - API integration - Data processing",
     genre:"Utility chronicle - short film", duration:"27 MIN", seance:"SHOWTIME 5:00 PM",
     tools:["Python","Tkinter","OpenWeatherMap"],
-    front:{src:"assets/weather-1.png", cap:"WEATHER APP INTERFACE"},
-    back:{src:"assets/weather-2.png", cap:"5-DAY VIEW / ERRORS"},
-    tagline:"The weather, without friction.",
-    blurb:"Realtime weather + 5-day forecast (conditions, min/max) via OpenWeatherMap. City search, temperature, humidity, wind, error handling.",
-    headline:"'Simple, honest interface'",
+    front:{src:"assets/weather-1.png", cap:"WEATHER APP INTERFACE IN CELSIUS"},
+    back:{src:"assets/weather-2.png", cap:"WEATHER APP INTERFACE IN FAHRENHEIT"},
+    tagline:"Search a city, get the sky.",
+    blurb:"A personal Python project built around the OpenWeatherMap API: search a city, read its current weather and look ahead to the coming days.",
+    headline:"'Celsius or Fahrenheit, one click'",
     sections:[
-      {h:"STRUCTURE", p:"main.py - gui.py - weather_api.py - utils.py - input, interface, requests, formatting. 66 commits: proof of iterative rigour."},
-      {h:"TECH NOTES", p:"A utility app is judged by its error states (invalid city, offline, API quota). Here: clear messages, never a blank screen."},
+      {h:"DESCRIPTION", p:[
+        "WeatherApp is a Python application designed to retrieve weather data from an external API, process the returned information, and present it in an accessible format.",
+        "The application allows users to search for a city, view its current weather, and access forecasts for the coming days. The project focuses on API integration, data processing and formatting, as well as error handling to manage potential issues when retrieving or processing data.",
+        "Developed as a personal project, WeatherApp provided hands-on experience in working with external APIs, transforming structured data into usable information, and building more robust applications through error management.",
+      ]},
+      {h:"STRUCTURE", list:[
+        "main.py — Entry point, app initialization and orchestration.",
+        "gui.py — Tkinter interface (search bar, current weather, forecast display).",
+        "weather_api.py — OpenWeatherMap API calls (current + forecast), query building, HTTP requests.",
+        "utils.py — Data processing, unit conversion/formatting, helpers and error handling.",
+      ]},
+      {h:"HOW IT WORKS", flowchart: 'vertical'},
     ],
     link:"https://github.com/Lvdoo/WeatherApp",
   },
@@ -171,7 +181,7 @@ function seedRng(seed){
 const stage = $("#stage"), grain = $("#grain");
 const loaderCount = $("#loaderCount");
 const ticketBar = $("#ticketBar");
-const stampTitle = $("#stampTitle"), stampBtn = $("#stampBtn"), stampMeta = $("#stampMeta");
+const stampTitle = $("#stampTitle"), stampNote = $("#stampNote"), stampBtn = $("#stampBtn"), stampMeta = $("#stampMeta");
 const bellHint = $("#bellHint");
 const detail = $("#detail"), detailSheet = $("#detailSheet"), detailScroll = $("#detailScroll"), noWebgl = $("#noWebgl");
 const projectListEl = $("#projectList");
@@ -453,14 +463,6 @@ function wrapLines(ctx,text,maxW){
   if(line) lines.push(line);
   return lines;
 }
-function drawCover(ctx,el,x,y,w,h){
-  ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);        // fond sombre garanti
-  const sw = el.videoWidth || el.naturalWidth || el.width || 0;
-  const sh = el.videoHeight || el.naturalHeight || el.height || 0;
-  if(!sw || !sh) return;
-  const s = Math.max(w/sw, h/sh);
-  try{ ctx.drawImage(el, x+(w-sw*s)/2, y+(h-sh*s)/2, sw*s, sh*s); }catch(_){ /* unreadable frame: keep the dark backdrop */ }
-}
 function drawReserved(ctx,x,y,w,h,spec,accent,active){
   ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);
   ctx.fillStyle = hexA(accent,.55);
@@ -519,11 +521,11 @@ function drawStamp(ctx,cx,cy,scale,alpha,date){
   ctx.restore();
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
-/* Mesure du rectangle reellement couvert par un media dans une zone.
-   Une VIDEO n'est jamais rognee : on prend son propre ratio (16:9, 4:3, vertical...
-   le demo TeruBot est un 480x848 VERTICAL) et on inscrit ce rectangle dans la zone -
-   le cadre du billet se pose alors SUR la video, qui reste entiere, sans deformation
-   et sans decoupe. Les images gardent le comportement " cover " du grand cadre. */
+/* Mesure le rectangle reellement couvert par un media dans une zone.
+   IMAGE comme VIDEO : on prend son propre ratio et on l'inscrit entier dans la zone -
+   le cadre du billet se pose alors SUR le media, sans deformation et sans decoupe.
+   C'est ce rectangle que drawMedia renvoie pour caler le double cadre, les coins
+   dores et la legende sur la taille reelle de l'image. */
 function mediaFitRect(el, x, y, w, h){
   const sw = el.videoWidth || el.naturalWidth || el.width || 0;
   const sh = el.videoHeight || el.naturalHeight || el.height || 0;
@@ -532,12 +534,15 @@ function mediaFitRect(el, x, y, w, h){
   const dw = Math.round(sw*s), dh = Math.round(sh*s);
   return { x: x + Math.round((w-dw)/2), y: y + Math.round((h-dh)/2), w: dw, h: dh };
 }
-/* Dessine le media et RENVOIE le rectangle couvert (cadre + coins dores + legende
-   se calent dessus). */
+/* Dessine le media et RENVOIE le rectangle qu'il occupe reellement.
+   IMAGE : jamais rognee. On l'inscrit entiere dans l'emplacement ; le double cadre,
+   les coins dores et la legende se calent ensuite sur ce rectangle exact. Une photo
+   16:10 dans un emplacement large garde donc TOUTE son image, avec le papier du
+   billet de chaque cote. */
 function drawMedia(t,ctx,x,y,w,h,spec,active){
   const info = getMedia(spec.src);
   const vid = (info.kind === "video" && info.el && info.el.readyState >= 2) ? info.el : null;
-  const box = vid ? mediaFitRect(vid, x, y, w, h) : {x, y, w, h};
+  let box = vid ? mediaFitRect(vid, x, y, w, h) : {x, y, w, h};
   if(vid){
     // video : cadre sombre = rectangle exact de la video (letterbox inutile, ratio respecte)
     ctx.fillStyle = "#0c0c0e"; ctx.fillRect(box.x, box.y, box.w, box.h);
@@ -549,7 +554,10 @@ function drawMedia(t,ctx,x,y,w,h,spec,active){
       else if(info.kind === "video"){
         ctx.fillStyle = "#0c0c0e"; ctx.fillRect(x,y,w,h); ctx.fillStyle = "#8b8577"; ctx.font = fBodyFont(600,15); ctx.fillText("LOADING...", x+20, y+h/2);
       }
-      else if(info.el) drawCover(ctx,info.el,x,y,w,h);
+      else if(info.el){
+        box = mediaFitRect(info.el, x, y, w, h);
+        ctx.drawImage(info.el, box.x, box.y, box.w, box.h);
+      }
       else { ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h); }
     }catch(e){
       ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);          // zone media jamais transparente
@@ -586,8 +594,10 @@ function drawFrontCore(t, active){
   capsFill(ctx,"LUDO CINEMA - OFFICIAL BOX OFFICE", W/2, 44, {px:23,color:ink,ls:6.5,align:"center",baseline:"middle"});
   ctx.font = serif(700,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
   ctx.fillText("*", 98, 46); ctx.fillText("*", W-98, 46);
-  ctx.fillStyle = ink; ctx.fillRect(60,74,W-120,1.6);
-  ctx.fillStyle = "rgba(46,37,24,.4)"; ctx.fillRect(86,80,W-172,1);
+  /* Les filets du bandeau s'arretent a la perforation : plus rien au-dessus de
+     "SOUVENIR" sur le talon, et le trait vient mourir sur la ligne de dechirure. */
+  ctx.fillStyle = ink; ctx.fillRect(60,74,seamX-60,1.6);
+  ctx.fillStyle = "rgba(46,37,24,.4)"; ctx.fillRect(86,80,seamX-86,1);
   capsFill(ctx,"No. " + p.num, 58, 118, {px:15,color:faded,ls:4.5});
   /* ancre a GAUCHE de la perforation (seamX-24), comme PROJECTIONIST'S STAMP au verso :
      a 14,5px la mention mesure 339px et, alignee a droite sur W-58, elle entamerait
@@ -596,32 +606,37 @@ function drawFrontCore(t, active){
 
   // --- titre du film (impression letterpress : double passe) ---
   ctx.font = serif(400,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
-  ctx.fillText("PRESENTS", cxm, 164);
-  ctx.font = serif(700,88); ctx.textBaseline = "alphabetic";
+  ctx.fillText("PRESENTS", cxm, 150);
+  ctx.font = serif(700,82); ctx.textBaseline = "alphabetic";
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1060);
-  let ty = 238;
+  let ty = 222;
   tl.slice(0,2).forEach(l => {
     ctx.fillStyle = "rgba(46,37,24,.30)"; ctx.fillText(l, cxm+2.5, ty+3);   // passe en creux
     ctx.fillStyle = ink; ctx.fillText(l, cxm, ty);
-    ty += 80;
+    ty += 76;
   });
-  ty -= 52;                                   // trait juste sous la derniere ligne du titre
+  ty -= 50;                                   // trait juste sous la derniere ligne du titre
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(cxm-170, ty); ctx.lineTo(cxm+170, ty); ctx.stroke();
   ctx.font = serif(700,21); ctx.fillStyle = accent;
   const dl = wrapLines(ctx, p.domain.toUpperCase(), 1060);
-  ctx.fillText(dl[0]||"", cxm, ty+34);
+  ctx.fillText(dl[0]||"", cxm, ty+32);
 
   // --- photo facon " carte de lobby " (grand format) ---
-  const my = Math.min(ty + 66, 440), mh = 760 - my, mx = 60, mw = seamX - mx - 26;
-  const box = drawMedia(t, ctx, mx, my, mw, mh, p.front, active);   // rectangle REEL du media
+  /* Le bloc titre a ete remonte et resserre pour donner ~50 px de hauteur
+     supplementaire a la photo. Les deux formats restent lisibles : l'image gagne
+     en presence sans que la typo touche le cadre. */
+  const my = Math.min(ty + 52, 440), mh = 780 - my, mx = 60, mw = seamX - mx - 26;
+  const box = drawMedia(t, ctx, mx, my, mw, mh, p.front, active);   // rectangle reel du media
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.4;
   rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();      // double cadre
   photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");            // coins dores
-  capsFill(ctx, p.front.cap, box.x + box.w/2, box.y+box.h+20, {px:15,color:faded,ls:2,align:"center"});
+  capsFill(ctx, p.front.cap, box.x + box.w/2, box.y+box.h+26, {px:15,color:faded,ls:2,align:"center"});
 
   // --- mentions tapees (label + valeur, chaque valeur calee dans sa colonne) ---
-  const dd = my + mh + 46;
+  /* La legende respire sous le cadre ; les mentions descendent d'autant pour
+     conserver le meme interligne au-dessus de DATE / SHOWTIME / ROOM / RANG. */
+  const dd = my + mh + 50;
   const cell = [
     ["DATE", p.year],
     ["SHOWTIME", p.seance.replace(/^SHOWTIME\s*/i, "")],
@@ -648,10 +663,10 @@ function drawFrontCore(t, active){
   }
 
   // --- bas du corps : serie + code + prix ---
-  perforation(ctx, 58, 818, seamX-116, "rgba(46,37,24,.5)");
-  barcode(ctx, 76, 856, 250, 46, p.num);
-  capsFill(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 922, {px:13,color:faded,ls:2});
-  const pxb = seamX-320, pyb = 838;
+  perforation(ctx, 58, 842, seamX-116, "rgba(46,37,24,.5)");
+  barcode(ctx, 76, 880, 250, 40, p.num);
+  capsFill(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 936, {px:13,color:faded,ls:2});
+  const pxb = seamX-320, pyb = 852;
   ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.setLineDash([7,5]);
   rr(ctx,pxb,pyb,246,84,6); ctx.stroke(); ctx.setLineDash([]);
   capsFill(ctx,"PRICE", pxb+123, pyb+25, {px:14,color:faded,ls:4,align:"center",baseline:"middle"});
@@ -660,10 +675,11 @@ function drawFrontCore(t, active){
 
   // --- talon a detacher ---
   ctx.font = serif(700,29); ctx.textAlign = "center";
-  ctx.fillStyle = ink; ctx.fillText("SOUVENIR", seamX+176, 96);
-  ctx.font = serif(700,34); ctx.fillText("ADMIT ONE", seamX+176, 160);
+  ctx.fillStyle = ink; ctx.fillText("MOVIE", seamX+176, 96);
+  ctx.font = serif(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
+  ctx.font = serif(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
   rosette(ctx, seamX+176, 264, 46, ink);
-  capsFill(ctx,"USHER", seamX+176, 344, {px:13,color:faded,ls:3,align:"center"});
+  capsFill(ctx,"PROJECT", seamX+176, 344, {px:13,color:faded,ls:3,align:"center"});
   ctx.font = serif(700,27); ctx.fillStyle = "#c22b27"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "S"+p.num);
   capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:faded,ls:3,align:"center"});
@@ -708,35 +724,40 @@ function drawBackCore(t, active){
 
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";   // ! remis a chaque redraw (sinon reste "center")
   ctx.font = fBodyFont(700,22); ctx.fillStyle = hexA(accent,.95);
-  ctx.fillText("No. " + p.num + " - " + p.domain.toUpperCase(), 58, 122);
+  ctx.fillText("No. " + p.num + " - " + p.domain.toUpperCase(), 58, 112);
 
   // --- titre + tagline ---
-  ctx.font = serif(700,58); ctx.fillStyle = cream;
+  ctx.font = serif(700,54); ctx.fillStyle = cream;
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1040);
-  let ty = 196;
-  tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 60; });
-  ctx.font = fQuoteFont(26); ctx.fillStyle = accent;
+  let ty = 178;
+  tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 56; });
+  ctx.font = fQuoteFont(24); ctx.fillStyle = accent;
   const ql = wrapLines(ctx, p.tagline, 1000);
   let qy = ty + 4;
-  ql.slice(0,2).forEach(l => { ctx.fillText(l,58,qy); qy += 31; });
+  ql.slice(0,2).forEach(l => { ctx.fillText(l,58,qy); qy += 29; });
 
   // --- media verso (grand format) ---
-  const my = Math.min(qy + 16, 400), mh = 632 - my, mx = 58, mw = seamX - mx - 24;
-  const box = drawMedia(t, ctx, mx, my, mw, mh, p.back, active);   // rectangle REEL du media
+  /* Meme gain qu'au recto : en-tete, titre et tagline se resserrent pour laisser
+     ~40 px de hauteur en plus a la photo, sans collision avec le synopsis. */
+  const my = Math.min(qy + 14, 400), mh = 646 - my, mx = 58, mw = seamX - mx - 24;
+  const box = drawMedia(t, ctx, mx, my, mw, mh, p.back, active);   // rectangle reel du media
   ctx.strokeStyle = "rgba(239,233,220,.35)"; ctx.lineWidth = 1.4;
   rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();
   photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");
-  capsFill(ctx, p.back.cap, box.x + box.w/2, box.y+box.h+18, {px:15,color:dim,ls:2,align:"center"});
+  capsFill(ctx, p.back.cap, box.x + box.w/2, box.y+box.h+30, {px:15,color:dim,ls:2,align:"center"});
 
   // --- synopsis tape ---
+  /* Meme regle qu'au recto : le synopsis suit la legende, donc il demarre plus bas ;
+     l'interligne est resserre de 2 px pour que les 5 lignes extremes laissent encore
+     respirer les pastilles et la perforation. */
   ctx.font = fBodyFont(500,22); ctx.fillStyle = "#d8d1c2";
   const bl = wrapLines(ctx, p.blurb, 1050);
-  let dy = my + mh + 46;
-  bl.slice(0,5).forEach(l => { ctx.fillText(l,58,dy); dy += 32; });
+  let dy = my + mh + 46 + 12;
+  bl.slice(0,5).forEach(l => { ctx.fillText(l,58,dy); dy += 29; });
 
   // --- chips outils ---
   /* le plafond 830 (et non 856) garantit que les pastilles ne croisent jamais
-     la perforation (y=872) ni le bas du synopsis, meme avec 5 lignes de texte */
+     la perforation (y=878) ni le bas du synopsis, meme avec 5 lignes de texte */
   const chipsY = Math.min(dy + 20, 830), chipH = 38;
   let cx = 58;
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
@@ -754,17 +775,20 @@ function drawBackCore(t, active){
   dateStamp(ctx, seamX-112, 846, 46, p.year);
 
   // --- pied verso ---
-  perforation(ctx, 58, 872, seamX-160, "rgba(239,233,220,.3)");
-  barcode(ctx, 58, 906, 200, 36, "V"+p.num);
-  capsFill(ctx,"PROJECTIONIST'S STAMP", seamX-40, 904, {px:15,color:accent,ls:2,align:"right"});
-  capsFill(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 928, {px:13,color:dim,ls:2,align:"right",weight:500});
+  /* Le pied descend de 6 px (le maximum avant la dechirure basse) pour rester
+     detache des pastilles, elles-memes poussees par le synopsis. */
+  perforation(ctx, 58, 878, seamX-160, "rgba(239,233,220,.3)");
+  barcode(ctx, 58, 912, 200, 36, "V"+p.num);
+  capsFill(ctx,"PROJECTIONIST'S STAMP", seamX-40, 910, {px:15,color:accent,ls:2,align:"right"});
+  capsFill(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 934, {px:13,color:dim,ls:2,align:"right",weight:500});
 
   // --- talon verso ---
   ctx.font = serif(700,29); ctx.textAlign = "center";
-  ctx.fillStyle = cream; ctx.fillText("SOUVENIR", seamX+176, 96);
-  ctx.font = serif(700,34); ctx.fillText("ADMIT ONE", seamX+176, 160);
+  ctx.fillStyle = cream; ctx.fillText("MOVIE", seamX+176, 96);
+  ctx.font = serif(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
+  ctx.font = serif(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
   rosette(ctx, seamX+176, 264, 46, "rgba(239,233,220,.7)");
-  capsFill(ctx,"USHER", seamX+176, 344, {px:13,color:dim,ls:3,align:"center"});
+  capsFill(ctx,"PROJECT", seamX+176, 344, {px:13,color:dim,ls:3,align:"center"});
   ctx.font = serif(700,27); ctx.fillStyle = "#c97a72"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "V"+p.num);
   capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:dim,ls:3,align:"center"});
@@ -2295,6 +2319,8 @@ function syncHandUI(){
   if(inHand){
     document.body.classList.add("hand");
     if(stampTitle) stampTitle.textContent = tickets[heroIdx].p.title.toUpperCase();
+    /* Le billet est en main : plus besoin d'expliquer qu'il se manipule. */
+    if(stampNote) stampNote.hidden = true;
     if(stampBtn) stampBtn.disabled = false;
   } else {
     document.body.classList.remove("hand");
@@ -2304,6 +2330,8 @@ function syncHandUI(){
        reste la source de verite du nombre de billets deja tamponnes. */
     const left = Math.max(0, PROJECTS.length - stampedOrder.length);
     if(stampTitle) stampTitle.textContent = left ? "SCROLL TO CHOOSE A TICKET" : "ALL STAMPED";
+    /* Le rappel " billets manipulables " ne vit qu'avec l'invite de choix. */
+    if(stampNote) stampNote.hidden = !left;
     if(stampBtn) stampBtn.disabled = true;
   }
 }
@@ -3826,10 +3854,22 @@ function openDetail(p){
   $("#dMedia").innerHTML = figs.length === 1
     ? figureHtml(figs[0]).replace(/^<figure>/, '<figure class="span2">')
     : figs.map(figureHtml).join("");
-  let body = `<h5>SYNOPSIS</h5><p>${p.blurb}</p>`;
-  body += p.sections.map(s => s.list
-    ? `<h5>${s.h}</h5><ul>${s.list.map(li => `<li>${li}</li>`).join("")}</ul>`
-    : `<h5>${s.h}</h5><p>${s.p}</p>`).join("");
+  let body = p.blurb ? `<h5>SYNOPSIS</h5><p>${p.blurb}</p>` : "";
+  body += p.sections.map(s => {
+    if(s.flowchart) {
+      if(s.flowchart === 'vertical') {
+        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="WeatherApp flowchart vertical"><div class="flow-v"><div class="flow-node flow-node--black"><div class="flow-step">USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><defs><marker id="arrFlow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--violet"><div class="flow-step">API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--violet"><div class="flow-step">DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--decision"><div class="flow-step">DECISION</div><div class="flow-label">Data retrieved successfully ?</div></div></div><div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44"><defs><marker id="arrSplit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#arrSplit)" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#arrSplit)" /></svg></div><div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">No</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><defs><marker id="arrBranch" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--err"><div class="flow-step">ERROR HANDLING</div><div class="flow-label">Manage request or data errors</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">Yes</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--ok"><div class="flow-step">WEATHER DATA</div><div class="flow-label">Current conditions and multi-day forecast</div></div></div></div><div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><defs><marker id="arrMerge" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#arrMerge)" /></svg></div><div class="flow-v-end"><div class="flow-node flow-node--ok"><div class="flow-step">USER INTERFACE</div><div class="flow-label">Display weather information</div></div></div></div>`;
+      }
+      return `<h5>${s.h}</h5><div class="flowchart" role="group" aria-label="WeatherApp flowchart"><div class="flow-row flow-row--main"><div class="flow-node"><div class="flow-step">Step 1 — USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 2 — API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 3 — DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 4 — SUCCESS CHECK</div><div class="flow-label">Data retrieved successfully?</div></div></div><div class="flow-branches"><svg class="flow-branch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="0" x2="50" y2="0" /><line x1="50" y1="0" x2="50" y2="28" /><line x1="50" y1="28" x2="100" y2="28" /><line x1="50" y1="0" x2="50" y2="72" /><line x1="50" y1="72" x2="100" y2="72" /></svg><div class="flow-branch"><div class="flow-branch-label">Yes</div><div class="flow-node flow-node--ok"><div class="flow-label">WEATHER DATA</div><div class="flow-sub">Current conditions and multi-day forecast</div></div></div><div class="flow-branch"><div class="flow-branch-label">No</div><div class="flow-node flow-node--err"><div class="flow-label">ERROR HANDLING</div><div class="flow-sub">Manage request or data errors</div></div></div></div><div class="flow-merge"><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg viewBox="0 0 12 48"><path d="M6 0V42M1 42L6 47L11 42" /></svg></div><div class="flow-node flow-node--end"><div class="flow-label">USER INTERFACE</div><div class="flow-sub">Display weather information</div></div></div></div>`;
+    }
+    if(s.list) {
+      return `<h5>${s.h}</h5><ul>${s.list.map(li => `<li>${li}</li>`).join("")}</ul>`;
+    }
+    if(Array.isArray(s.p)) {
+      return `<h5>${s.h}</h5>${s.p.map(par => `<p>${par.replace(/\n/g,'<br>')}</p>`).join("")}`;
+    }
+    return `<h5>${s.h}</h5><p>${(s.p||'').replace(/\n/g,'<br>')}</p>`;
+  }).join("");
   $("#dBody").innerHTML = body;
   detail.classList.add("open"); detail.setAttribute("aria-hidden","false");
   document.body.style.overflow = "hidden";
