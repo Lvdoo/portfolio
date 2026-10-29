@@ -55,7 +55,7 @@ const PROJECTS = [
       p: "Designing TeruBot's emotional expressions taught me how to translate abstract emotional states into visual and physical behaviours. The user study highlighted the importance of expressive consistency and intuitive interactions: participants found the robot's behaviour easy to understand and unanimously valued its contribution to the experience. Unexpected physical interactions also revealed how a robot's presence can encourage engagement beyond its intended functions."},
 
       {h: "CHI EA 2026",
-      p: `Co-author - <a href="https://dl.acm.org/doi/epdf/10.1145/3772363.3799320" target="_blank" rel="noopener noreferrer">https://dl.acm.org/doi/epdf/10.1145/3772363.3799320</a>`},
+      p: `Co-author of the paper TeruBot: Materializing Collective Emotions Through anEmbodied Robotic Metaphor - <a href="https://dl.acm.org/doi/epdf/10.1145/3772363.3799320" target="_blank" rel="noopener noreferrer">https://dl.acm.org/doi/epdf/10.1145/3772363.3799320</a>`},
 
     ],
     link: CONFIG.github,
