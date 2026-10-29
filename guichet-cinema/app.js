@@ -27,18 +27,36 @@ const newM3  = HAS_THREE ? () => new THREE.Matrix3()              : () => null;
 const PROJECTS = [
   {
     id:"terubot", num:"001", title:"TeruBot", accent:"#e03131",
-    domain:"Social robotics - Installation", year:"2025", role:"Prototyping - Code - Electronics",
+    domain:"Human-robot Interaction - Installation", year:"2025", role:"Prototyping - Code - Electronics",
     seance:"SHOWTIME 9:00 PM",
-    tools:["Arduino","KiCad","Sensors","Realtime"],
+    tools:["Python","Electronic","Sensors","Realtime"],
     front:{src:"assets/terubot-demo.mp4", cap:"TRAILER - WORKSHOP DEMO"},
     back:{src:"assets/terubot-2.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
-    tagline:"The robot that makes a group's mood visible to everyone.",
+    tagline:"A robot that makes collective emotions visible.",
     blurb:"TeruBot turns a group's emotions into a physical, interactive representation. Inspired by the Japanese Teru Teru Bozu, it visualises the collective emotional mood in a simple, playful and intuitive way.",
-    headline:"'A film about collective emotions'",
+    headline:"'When Feelings Take Shape'",
     sections:[
-      {h:"SYSTEM INTENT", list:["Readable from 3 metres away: one emotion = one colour / one movement.","No screen: the feedback is the robot's body.","Collective ritual: everyone contributes, everyone understands."]},
-      {h:"PROTO", p:"Sensors -> microcontroller -> actuators + light. Schematics and PCB in KiCad (Test / HMA Rendu1 folder), filmed iterations - including the assets/terubot-demo.mp4 demo."},
-      {h:"KEY TAKEAWAY", p:"Testing with real groups changed everything: the emotion -> movement mapping was simplified 3 times so an 8-year-old could still follow it."},
+      
+      
+      {h: "SYSTEM INTENT",
+      list: [
+      "Make collective emotions visible: transform individual emotional check-ins into a shared emotional atmosphere, represented through a weather-based metaphor.",
+      "Embodied expression: translate abstract emotional states into expressive eye animations, blinking patterns and head movements, making the robot's emotional state perceptible without relying on words.",
+      "Encourage social connection: create a shared physical presence that invites communities to become aware of their emotional climate and reflect on their collective well-being."]},
+     
+      {h: "PROTO",
+      p: "Mobile App -> Backend -> Robot. A companion mobile application allows participants to submit emotional check-ins through four dimensions: general mood, energy, stress and social connection. Individual inputs are aggregated into a collective emotional state and translated into weather-based expressions. I designed and programmed the robot's emotional eye expressions using Python and Pygame, displayed on two Waveshare ESP32-S3 screens. Combined with head movements, these animated eyes give the robot its expressive personality."},
+      
+      {h: "USER STUDY & FEEDBACK",
+      p: "A preliminary user study with 8 participants evaluated the usability and perceived quality of both the mobile application and the robot. All participants rated the emotional check-in experience 5/5, while the robot received 5/5 from everyone for enhancing the overall experience. Participants also highlighted the app's visual design and colours, while spontaneous interactions such as touching and stroking the robot's head revealed opportunities for richer embodied interactions."},
+      
+      
+      {h: "KEY TAKEAWAYS",
+      p: "Designing TeruBot's emotional expressions taught me how to translate abstract emotional states into visual and physical behaviours. The user study highlighted the importance of expressive consistency and intuitive interactions: participants found the robot's behaviour easy to understand and unanimously valued its contribution to the experience. Unexpected physical interactions also revealed how a robot's presence can encourage engagement beyond its intended functions."},
+
+      {h: "CHI EA 2026",
+      p: `Co-author - <a href="https://dl.acm.org/doi/epdf/10.1145/3772363.3799320" target="_blank" rel="noopener noreferrer">https://dl.acm.org/doi/epdf/10.1145/3772363.3799320</a>`},
+
     ],
     link: CONFIG.github,
   },
