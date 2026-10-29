@@ -118,7 +118,7 @@ const PROJECTS = [
         {t:"CNN MODEL",         d:"2 conv + 2 dense layers, trained on MNIST with augmentation"},
         {t:"PREDICTION",        d:"Digit displayed live, stabilized over frames"},
       ]},
-      {h:"TECH NOTES", p:"**DRAW & PREDICT** : CNN accuracy : 99.03%, Loss : 0.0148, Epochs : 5\n**REAL-WORD RECOGNITION** : Accuracy of  80.81% on a custom dataset of 100 handwritten digit images(10 for each digits), created to test the model on real-world handwriting.\n**MULTI-DIGIT DETECTION** :20 images, 54 digits, never used in training.\n  CNN on ground-truth crops: 90.7 % (49/54, 95 % CI 80-96 %)\n  Detector recall @ IoU 0.5: 7.4 % (4/54) — AP@0.5 0.05"},
+      {h:"TECH NOTES", p:"<strong>DRAW & PREDICT</strong> : CNN accuracy : 99.03%, Loss : 0.0148, Epochs : 5\n<strong>REAL-WORLD RECOGNITION</strong> : Accuracy of 80.81% on a custom dataset of 100 handwritten digit images (10 for each digit), created to test the model on real-world handwriting.\n<strong>MULTI-DIGIT DETECTION</strong> : 20 images, 54 digits, never used in training.\n  CNN on ground-truth crops: 90.7 % (49/54, 95 % CI 80-96 %)\n  Detector recall @ IoU 0.5: 7.4 % (4/54) \u2014 AP@0.5 0.05"},
     ],
     link: CONFIG.github,
   },
