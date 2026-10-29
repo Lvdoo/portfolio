@@ -9,13 +9,6 @@ const CONFIG = {
   github: "https://github.com/Lvdoo",
 };
 
-/* -- THREE.JS PEUT-IL MANQUER ? -------------------------------------------
-   Le site est un FICHIER LOCAL (double-clic) : sur une tablette, un reseau
-   bloque, coupe ou lent peut faire echouer le chargement de Three.js. Si la
-   bibliotheque manque, on ne casse PAS tout le site pour autant : la liste des
-   projets, le HUD, les fiches et le repli "noWebgl" (les six films en cartes)
-   restent la. Seule la scene 3D disparait.
-   (Three.js vient du CDN ; sans lui, le repli "noWebgl" prend le relais.) */
 const HAS_THREE = (typeof window !== "undefined" && typeof window.THREE !== "undefined");
 /* Les " scratchs " 3D (vecteurs, matrices, rayon) ne servent QUE dans la scene :
    camera, boucle de rendu, projections. Si Three.js manque, ils ne sont jamais
@@ -34,7 +27,7 @@ const PROJECTS = [
   {
     id:"terubot", num:"001", title:"TeruBot", accent:"#e03131",
     domain:"Social robotics - Installation", year:"2025", role:"Prototyping - Code - Electronics",
-    genre:"Ensemble film - soft sci-fi", duration:"77 MIN", seance:"SHOWTIME 9:00 PM",
+    seance:"SHOWTIME 9:00 PM",
     tools:["Arduino","KiCad","Sensors","Realtime"],
     front:{src:"assets/terubot-demo.mp4", cap:"TRAILER - WORKSHOP DEMO"},
     back:{src:"assets/terubot-2.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
@@ -51,7 +44,7 @@ const PROJECTS = [
   {
     id:"breathin", num:"002", title:"BreathIN", accent:"#2f7fe0",
     domain:"Breathing - Unity - Particles", year:"2026", role:"Unity - C# - Realtime",
-    genre:"Contemplative long take", duration:"109 MIN", seance:"SHOWTIME 6:30 PM",
+    seance:"SHOWTIME 6:30 PM",
     tools:["Unity","C#","Particles","Sound design"],
     front:{src:"assets/breathin-1.png", cap:"THE CHERRY TREE / GUIDED BREATHING"},
     back:{src:"assets/breathin-2.png", cap:"CROSSING / COHERENCE"},
@@ -68,7 +61,7 @@ const PROJECTS = [
   {
     id:"kapsul", num:"003", title:"Kapsul", accent:"#c8813a",
     domain:"Product - Kickstarter - Launch", year:"2025", role:"Prototyping - Web - Launch",
-    genre:"Product blockbuster - launch trailer", duration:"93 MIN", seance:"SHOWTIME 8:00 PM",
+    seance:"SHOWTIME 8:00 PM",
     tools:["Prototyping","Art Direction","Crowdfunding"],
     front:{src:"assets/Kapsul-1.png", cap:"PROTOTYPE IN CONTEXT"},
     back:{src:"assets/Kapsul-2.mp4", cap:"KAPSUL PHOTO"},
@@ -84,7 +77,7 @@ const PROJECTS = [
   {
     id:"keymotion", num:"004", title:"KeyMotion", accent:"#4a58d8",
     domain:"Gesture - Computer Vision", year:"2025", role:"Vision - Dev",
-    genre:"Interactive film - gesture", duration:"66 MIN", seance:"SHOWTIME 10:15 PM",
+    seance:"SHOWTIME 10:15 PM",
     tools:["Python","MediaPipe","Unity","ShaderLab"],
     front:{src:"assets/keymotion-1.png", cap:"GESTURE / REALTIME MAPPING"},
     back:{src:"assets/keymotion-2.png", cap:"UNITY SCENE / SHADER"},
@@ -100,7 +93,7 @@ const PROJECTS = [
   {
     id:"vision", num:"005", title:"Neural Vision", accent:"#8e44d8",
     domain:"AI - Computer Vision", year:"2026", role:"Model training - Dataset - Python",
-    genre:"Found footage - AI archives", duration:"88 MIN", seance:"SHOWTIME 7:00 PM",
+    seance:"SHOWTIME 7:00 PM",
     tools:["Python","CNN","Tiny SSD","OpenCV","Tkinter"],
     front:{src:"assets/Vision-1.mp4", cap:"MODEL TRAINING"},
     back:{src:"assets/Vision-2.mp4", cap:"HANDWRITING"},
@@ -125,7 +118,7 @@ const PROJECTS = [
   {
     id:"weather", num:"006", title:"WeatherApp", accent:"#2f9e44",
     domain:"Desktop tool - Weather data", year:"2024", role:"GUI - API integration - Data processing",
-    genre:"Utility chronicle - short film", duration:"27 MIN", seance:"SHOWTIME 5:00 PM",
+    seance:"SHOWTIME 5:00 PM",
     tools:["Python","Tkinter","OpenWeatherMap"],
     front:{src:"assets/weather-1.png", cap:"WEATHER APP INTERFACE IN CELSIUS"},
     back:{src:"assets/weather-2.png", cap:"WEATHER APP INTERFACE IN FAHRENHEIT"},
@@ -816,14 +809,7 @@ function drawBackCore(t, active){
   fillCapsText(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:dim,ls:3,align:"center"});
 
   // --- dechirures + encoches ---
-  const rip = "rgba(0,0,0,.32)";
-  ctx.fillStyle = rip; tornTop(ctx, W, 10, 7);
-  ctx.fillStyle = rip; tornEdge(ctx, W, H, 7);
-  ctx.fillStyle = rip; tornRight(ctx, W-16, H, 7);
-  perforationV(ctx, seamX, 26, H-52, "rgba(239,233,220,.35)");
-  ctx.fillStyle = rip;
-  ctx.beginPath(); ctx.arc(seamX, 16, 9, 0, Math.PI); ctx.fill();
-  ctx.beginPath(); ctx.arc(seamX, H-16, 9, Math.PI, 0); ctx.fill();
+  drawTicketEdges(ctx, W, H, seamX, "rgba(0,0,0,.32)", "rgba(239,233,220,.35)");
 
   t.backTex.needsUpdate = true;
 }
@@ -1249,8 +1235,6 @@ function makeBoothInterior(){
     boothPosters.push(pg);
   });
 
-  // (table du milieu, caisse, billets decoratifs, tampon et lampe retires : la cabine reste epuree)
-
   // horloge murale (cote gauche, au-dessus) - reglee sur l'heure LOCALE de la personne qui regarde.
   // Placee assez haut sur le fond pour ne pas etre masquee par l'affiche anglaise de gauche.
   const ck = new THREE.Group();
@@ -1278,11 +1262,6 @@ function makeBoothInterior(){
   boothClock = ck;
   boothClockHands = clockHands;
   updateClock();
-
-  // --- l'ancienne silhouette du caissier a ete retiree : elle est remplacee par deux
-  //     statuettes de recompense posees sur le comptoir, a DROITE de l'affiche rouge -
-  //     le CESAR et l'OSCAR (construites par makeCesarStatue / makeOscarStatue,
-  //     positions ajustees par placeCesar()) ---
 
   // --- lumiere chaude de la cabine ---
   const warm = new THREE.PointLight(0xffc07a, 1.2, 11, 2);
@@ -3861,8 +3840,8 @@ function openDetail(p){
   $("#dTagline").textContent = p.tagline;
   $("#dHeadline").textContent = p.headline;
   /* AFFICHE EPUREE : uniquement des informations REELLES sur le projet.
-     Les metadonnees de cinema fictives (SHOWTIME, GENRE, RUNTIME, ticket n°) ne
-     sont PAS reprises ici - elles n'ont de sens que sur les TICKETS (decoration).
+     Les metadonnees de cinema fictives (SHOWTIME, ticket n°) ne sont PAS reprises
+     ici - elles n'ont de sens que sur les TICKETS (decoration).
      On garde : le domaine, l'annee, le role et les outils reellement utilises. */
   $("#dMeta").innerHTML = [
     ["DOMAIN", p.domain],
@@ -3929,10 +3908,6 @@ function openDetail(p){
         }
         return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="${p.title === 'WeatherApp' ? 'WeatherApp flowchart vertical' : p.title + ' pipeline'}"><div class="flow-v flow-v--steps">${out}</div></div>`;
       }
-      if(s.flowchart === 'vertical') {
-        // legacy: not used
-      }
-      // horizontal/legacy removed if unused
     }
     if(s.list) {
       return `<h5>${s.h}</h5><ul>${s.list.map(li => `<li>${li}</li>`).join("")}</ul>`;
@@ -4054,7 +4029,6 @@ function initHud(){
   }, 1000/24);
 
   /* reveal */
-  $$(".reveal[data-delay]").forEach(el => el.style.setProperty("--d", el.dataset.delay+"ms"));
   const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("in")), {threshold:.12});
   $$(".reveal").forEach(el => io.observe(el));
   $$("[data-split] h2").forEach(h => {
@@ -4180,16 +4154,12 @@ async function boot(){
     console.error("[box office] boot step failed", e);
     if(noWebgl){
       noWebgl.hidden = false;
-      const list = document.getElementById('noWebglList');
-      if(list && typeof buildNoWebglList === 'function'){
-        try{ buildNoWebglList(list); }catch(_){}
-      }
     }
     if(document.body){
       document.body.removeAttribute('data-loading');
       document.body.removeAttribute('aria-busy');
     }
-    if(typeof loaderDone !== 'undefined') loaderDone = true;
+    loaderDone = true;
     const loader = document.getElementById('loader');
     if(loader){ loader.style.opacity='0'; loader.style.visibility='hidden'; loader.style.pointerEvents='none'; }
   }finally{
