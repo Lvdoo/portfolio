@@ -472,6 +472,8 @@ body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOS
 .detail-body h5::after{content:"";flex:1;height:1px;background:var(--line)}
 .detail-body ul{margin-left:18px;display:flex;flex-direction:column;gap:6px}
 .detail-body b,.detail-body strong{color:var(--ink)}
+.detail-body a{color:var(--accent-ink);font-weight:700;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.detail-body a:hover,.detail-body a:focus-visible{color:var(--stamp)}
 
 /* -- reveal -- */
 .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0ms)}

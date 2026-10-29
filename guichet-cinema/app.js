@@ -7,6 +7,7 @@
 
 const CONFIG = {
   github: "https://github.com/Lvdoo",
+  kapsulCampaign: "https://www.kickstarter.com/projects/kapsul-quickstarter/quickstarter-kapsul",
 };
 
 const HAS_THREE = (typeof window !== "undefined" && typeof window.THREE !== "undefined");
@@ -60,17 +61,19 @@ const PROJECTS = [
   },
   {
     id:"kapsul", num:"003", title:"Kapsul", accent:"#c8813a",
-    domain:"Product - Kickstarter - Launch", year:"2025", role:"Prototyping - Web - Launch",
+    domain:"Product Design - Crowdfunding", year:"2025 - 2026", role:"Product Design - Prototyping - Campaign Strategy",
     seance:"SHOWTIME 8:00 PM",
-    tools:["Prototyping","Art Direction","Crowdfunding"],
+    tools:["Prototyping","Designing","Crowdfunding"],
     front:{src:"assets/Kapsul-1.png", cap:"PROTOTYPE IN CONTEXT"},
     back:{src:"assets/Kapsul-2.mp4", cap:"KAPSUL PHOTO"},
     tagline:"From an idea to a campaign that takes off.",
-    blurb:"Kapsul turns a product idea into a concrete, marketable project: concept, prototyping, product design and an identity built for a crowdfunding launch.",
-    headline:"'Groundbreaking product cinema'",
+    blurb:"From product concept to crowdfunding launch, Kapsul combines product design, rapid prototyping and brand storytelling to turn an idea into a market-ready project..",
+    headline:"'Kapsul : Protect your children with style'",
     sections:[
-      {h:"WHAT I DID", list:["Positioning + naming + identity.","Fast prototyping, photos / renders for the campaign page.","Campaign storytelling: problem -> demo -> rewards."]},
-      {h:"TECH NOTES", p:"A Kickstarter page is an interface: hierarchy, proof, price, urgency. I built the page like a funnel, not a poster."},
+      {h:"WHAT I DID", list:["Designing and Prototyping.","Photos / renders for the campaign page.","Campaign storytelling and strategy."]},
+      {h:"TECH NOTES", p:`A Kickstarter page is an interface: hierarchy, proof, price, urgency. I built the page like a funnel, not a poster.
+The Kickstarter campaign did not reach its funding goal, but it was a valuable learning experience in product positioning, prototyping and crowdfunding strategy.
+<strong>Explore the campaign:</strong> <a href="${CONFIG.kapsulCampaign}" target="_blank" rel="noopener noreferrer">${CONFIG.kapsulCampaign}</a>`},
     ],
     link: "#contact",
   },
