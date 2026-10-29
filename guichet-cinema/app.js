@@ -37,7 +37,7 @@ const PROJECTS = [
     genre:"Ensemble film - soft sci-fi", duration:"77 MIN", seance:"SHOWTIME 9:00 PM",
     tools:["Arduino","KiCad","Sensors","Realtime"],
     front:{src:"assets/terubot-demo.mp4", cap:"TRAILER - WORKSHOP DEMO"},
-    back:{src:"assets/Terubot-2.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
+    back:{src:"assets/terubot-2.mp4", cap:"WORKSHOP DEMO (REPRISE)"},
     tagline:"The robot that makes a group's mood visible to everyone.",
     blurb:"TeruBot turns a group's emotions into a physical, interactive representation. Inspired by the Japanese Teru Teru Bozu, it visualises the collective emotional mood in a simple, playful and intuitive way.",
     headline:"'A film about collective emotions'",
@@ -144,7 +144,16 @@ const PROJECTS = [
         "weather_api.py — OpenWeatherMap API calls (current + forecast), query building, HTTP requests.",
         "utils.py — Data processing, unit conversion/formatting, helpers and error handling.",
       ]},
-      {h:"HOW IT WORKS", flowchart: 'vertical'},
+      {h:"HOW IT WORKS", flowchart:'steps', steps:[
+        {t:"USER INPUT", d:"Search a city"},
+        {t:"API REQUEST", d:"Fetch weather data"},
+        {t:"DATA PROCESSING", d:"Parse, transform and validate data"},
+        {t:"DECISION", d:"Data retrieved successfully ?", type:"decision", branches:[
+          {label:"No", t:"ERROR HANDLING", d:"Manage request or data errors"},
+          {label:"Yes", t:"WEATHER DATA", d:"Current conditions and multi-day forecast"}
+        ]},
+        {t:"USER INTERFACE", d:"Display weather information"},
+      ]},
     ],
     link:"https://github.com/Lvdoo/WeatherApp",
   },
@@ -3872,24 +3881,58 @@ function openDetail(p){
     if(s.flowchart) {
       if(s.flowchart === 'steps') {
         const steps = s.steps || [];
-        const flowDefs = `<defs><marker id="arrFlowSteps" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs>`;
-        const flowNode = (step, i) => {
+        const mid = 'arrFlow-' + p.id;
+        const flowDefs = `<defs><marker id="${mid}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs>`;
+        const isWeather = p.id === 'weather';
+        let out = '';
+        for(let i=0;i<steps.length;i++){
+          const step = steps[i];
+          if(step && step.type === 'decision'){
+            const branches = step.branches || [];
+            const yes = branches.find(b => /yes/i.test(b.label||'')) || branches[0] || {};
+            const no  = branches.find(b => /no/i.test(b.label||''))  || branches[1] || {};
+            if(isWeather){
+              out += `<div class="flow-v"><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">${step.t}</div><div class="flow-label">${step.d||''}</div></div></div>`;
+              out += `<div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44">${flowDefs}<line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#${mid})" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#${mid})" /></svg></div>`;
+              out += `<div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">${no.label||'No'}</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#${mid})" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">${no.t||''}</div><div class="flow-label">${no.d||''}</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">${yes.label||'Yes'}</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#${mid})" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">${yes.t||''}</div><div class="flow-label">${yes.d||''}</div></div></div></div>`;
+              out += `<div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#${mid})" /></svg></div>`;
+              i++;
+              const mergeStep = steps[i];
+              if(mergeStep){
+                out += `<div class="flow-v-end"><div class="flow-node flow-node--final"><div class="flow-step">${mergeStep.t}</div><div class="flow-label">${mergeStep.d||''}</div></div></div>`;
+              }
+              continue;
+            } else {
+              out += `<div class="flow-v"><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">${step.t}</div><div class="flow-label">${step.d||''}</div></div></div>`;
+              out += `<div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28">${flowDefs}<path d="M6 0 L6 22" marker-end="url(#${mid})" /></svg></div><div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44"><line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#${mid})" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#${mid})" /></svg></div>`;
+              out += `<div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">${no.label||'No'}</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#${mid})" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">${no.t||''}</div><div class="flow-label">${no.d||''}</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">${yes.label||'Yes'}</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#${mid})" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">${yes.t||''}</div><div class="flow-label">${yes.d||''}</div></div></div></div>`;
+              out += `<div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#${mid})" /></svg></div>`;
+              i++;
+              const mergeStep = steps[i];
+              if(mergeStep){
+                out += `<div class="flow-v-end"><div class="flow-node flow-node--final"><div class="flow-step">${mergeStep.t}</div><div class="flow-label">${mergeStep.d||''}</div></div></div>`;
+              }
+              continue;
+            }
+          }
+          if(isWeather){
+            const last = i === steps.length - 1;
+            const cls = i === 0 ? "flow-node flow-node--black" : (last ? "flow-node flow-node--final" : "flow-node flow-node--accent");
+            out += `<div class="flow-v"><div class="${cls}"><div class="flow-step">${step.t}</div><div class="flow-label">${step.d||''}</div></div>`;
+            if(!last){ out += `<div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28">${i===0?flowDefs:''}<path d="M6 0 L6 22" marker-end="url(#${mid})" /></svg></div></div>`; } else { out += `</div>`; }
+            continue;
+          }
           const last = i === steps.length - 1;
-          const cls = i === 0
-            ? "flow-node flow-node--start"
-            : last
-              ? "flow-node flow-node--end flow-node--final"
-              : "flow-node flow-node--accent";
-          return `<div class="${cls}"><div class="flow-step">Step ${i+1} — ${step.t}</div><div class="flow-label">${step.d}</div></div>`;
-        };
-        const flowArrow = first => `<div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28">${first ? flowDefs : ""}<path d="M6 0 L6 22" marker-end="url(#arrFlowSteps)" /></svg></div>`;
-        const flowV = steps.map((step, i) => flowNode(step, i) + (i < steps.length - 1 ? flowArrow(i === 0) : "")).join("");
-        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="${p.title} pipeline"><div class="flow-v flow-v--steps">${flowV}</div></div>`;
+          const cls = i === 0 ? "flow-node flow-node--start" : (last ? "flow-node flow-node--end flow-node--final" : "flow-node flow-node--accent");
+          out += `<div class="flow-v"><div class="${cls}"><div class="flow-step">${i===0?'':('Step '+(i+1)+' — ')}${step.t}</div><div class="flow-label">${step.d||''}</div></div>`;
+          if(!last){ out += `<div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28">${i===0?flowDefs:''}<path d="M6 0 L6 22" marker-end="url(#${mid})" /></svg></div></div>`; } else { out += `</div>`; }
+        }
+        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="${p.title === 'WeatherApp' ? 'WeatherApp flowchart vertical' : p.title + ' pipeline'}"><div class="flow-v flow-v--steps">${out}</div></div>`;
       }
       if(s.flowchart === 'vertical') {
-        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="WeatherApp flowchart vertical"><div class="flow-v"><div class="flow-node flow-node--black"><div class="flow-step">USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><defs><marker id="arrFlow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">DECISION</div><div class="flow-label">Data retrieved successfully ?</div></div></div><div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44"><defs><marker id="arrSplit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#arrSplit)" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#arrSplit)" /></svg></div><div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">No</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><defs><marker id="arrBranch" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">ERROR HANDLING</div><div class="flow-label">Manage request or data errors</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">Yes</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">WEATHER DATA</div><div class="flow-label">Current conditions and multi-day forecast</div></div></div></div><div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><defs><marker id="arrMerge" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#arrMerge)" /></svg></div><div class="flow-v-end"><div class="flow-node flow-node--final"><div class="flow-step">USER INTERFACE</div><div class="flow-label">Display weather information</div></div></div></div>`;
+        // legacy: not used
       }
-      return `<h5>${s.h}</h5><div class="flowchart" role="group" aria-label="WeatherApp flowchart"><div class="flow-row flow-row--main"><div class="flow-node flow-node--black"><div class="flow-step">Step 1 — USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">Step 2 — API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">Step 3 — DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">Step 4 — SUCCESS CHECK</div><div class="flow-label">Data retrieved successfully?</div></div></div><div class="flow-branches"><svg class="flow-branch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="0" x2="50" y2="0" /><line x1="50" y1="0" x2="50" y2="28" /><line x1="50" y1="28" x2="100" y2="28" /><line x1="50" y1="0" x2="50" y2="72" /><line x1="50" y1="72" x2="100" y2="72" /></svg><div class="flow-branch"><div class="flow-branch-label">Yes</div><div class="flow-node flow-node--accent"><div class="flow-label">WEATHER DATA</div><div class="flow-sub">Current conditions and multi-day forecast</div></div></div><div class="flow-branch"><div class="flow-branch-label">No</div><div class="flow-node flow-node--accent"><div class="flow-label">ERROR HANDLING</div><div class="flow-sub">Manage request or data errors</div></div></div></div><div class="flow-merge"><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg viewBox="0 0 12 48"><path d="M6 0V42M1 42L6 47L11 42" /></svg></div><div class="flow-node flow-node--final"><div class="flow-label">USER INTERFACE</div><div class="flow-sub">Display weather information</div></div></div></div>`;
+      // horizontal/legacy removed if unused
     }
     if(s.list) {
       return `<h5>${s.h}</h5><ul>${s.list.map(li => `<li>${li}</li>`).join("")}</ul>`;

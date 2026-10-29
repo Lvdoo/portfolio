@@ -1,7 +1,25 @@
-# OS / editor junk
+# Système
+.DS_Store
 Thumbs.db
 desktop.ini
-.DS_Store
 
-# Old site archive (binary, not versioned)
-*.zip
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Vercel (dossier local créé par `vercel link` / `vercel dev`)
+.vercel
+
+# Secrets et variables d'environnement
+.env
+.env.*
+
+# Logs et dépendances (au cas où tu ajoutes npm plus tard)
+node_modules/
+npm-debug.log*
+
+# Sauvegardes et fichiers temporaires
+*.bak
+*.tmp
+*.log
