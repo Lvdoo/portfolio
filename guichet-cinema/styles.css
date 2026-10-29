@@ -426,10 +426,10 @@ body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOS
 .flow-step{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;text-align:center}
 .flow-label{font-size:11.5px;font-weight:700;letter-spacing:.01em;text-align:center;line-height:1.4}
 .flow-sub{font-size:10.5px;color:var(--dim);line-height:1.35;white-space:normal;text-align:center}
-.flow-node--ok{border-color:rgba(44,160,44,.8);background:linear-gradient(180deg,rgba(44,160,44,.10),var(--paper))}
+.flow-node--ok{border-color:rgba(50,205,50,.98);background:linear-gradient(180deg,rgba(50,205,50,.18),var(--paper))}
 .flow-node--err{border-color:rgba(194,43,39,.9);background:linear-gradient(180deg,rgba(194,43,39,.12),var(--paper))}
-.flow-node--violet{border-color:rgba(108,92,231,.9);background:linear-gradient(180deg,rgba(108,92,231,.12),var(--paper))}
-.flow-node--black{border-color:rgba(20,16,10,.9);background:linear-gradient(180deg,rgba(20,16,10,.06),var(--paper))}
+.flow-node--dark_green{border-color:rgba(22,89,58,.95);background:linear-gradient(180deg,rgba(3, 189, 68, 0.163),var(--paper))}
+.flow-node--black{border-color:rgb(20, 16, 10);background:linear-gradient(180deg,rgba(20,16,10,.06),var(--paper))}
 .flow-node--decision{border-style:dashed;border-color:rgba(212,132,55,.95);background:linear-gradient(180deg,rgba(212,132,55,.12),var(--paper))}
 .flow-node--end{min-width:190px;text-align:center;align-self:center;white-space:normal}
 .flow-arrow{display:flex;align-items:center;justify-content:center;width:40px;flex:0 0 40px;color:var(--accent-ink)}
@@ -466,13 +466,24 @@ body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOS
 .flow-branch-conn{height:18px;width:12px;display:flex;align-items:center;justify-content:center;color:var(--accent-ink);margin-top:-2px;margin-bottom:-2px}
 .flow-branch-svg{width:12px;height:18px;display:block}
 .flow-pill{display:inline-flex;align-items:center;justify-content:center;padding:2px 12px;border-radius:999px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;min-width:42px}
-.flow-pill--yes{background:rgba(212,132,55,.18);color:var(--accent-ink);border:1px solid rgba(212,132,55,.95)}
-.flow-pill--no{background:rgba(212,132,55,.18);color:var(--accent-ink);border:1px solid rgba(212,132,55,.95)}
+.flow-pill--yes{background:rgba(47,158,68,.18);color:var(--accent-ink);border:1px solid var(--accent)}
+.flow-pill--no{background:rgba(47,158,68,.18);color:var(--accent-ink);border:1px solid var(--accent)}
+.flowchart--vert .flow-node{max-width:280px;width:100%;white-space:normal;text-align:center}
+.flowchart--vert .flow-label{white-space:normal;overflow-wrap:break-word;word-break:break-word}
+/* Neural Vision pipeline - same vertical flow as WeatherApp, driven by project accent */
+.flow-v--steps{width:100%;max-width:280px}
+.flow-v--steps .flow-node{width:100%;min-width:0;max-width:280px;white-space:normal;overflow-wrap:break-word}
+.flow-v--steps .flow-label{white-space:normal;overflow-wrap:break-word;word-break:break-word}
+.flow-node--start{border-color:var(--ink);background:linear-gradient(180deg,rgba(20,16,10,.06),var(--paper))}
+.flow-node--accent{border-color:var(--accent);background:var(--paper)}
+.flow-node--final{border-color:var(--accent);background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 12%,var(--paper)),var(--paper))}
+.flow-node--black{border-color:rgb(20,16,10);background:linear-gradient(180deg,rgba(20,16,10,.06),var(--paper))}
 @media(max-width:700px){
   .flowchart{padding:10px}
   .flow-v-branches,.flow-v-merge{max-width:100%;gap:10px}
   .flow-v-branch-row{max-width:100%;gap:12px}
   .flow-node{min-width:130px;max-width:170px;padding:7px 10px}
+  .flowchart--vert .flow-node{max-width:calc(100vw - 80px)}
   .flow-label{font-size:11px}
   .flow-split-wrap,.flow-merge-wrap{max-width:100%}
 }

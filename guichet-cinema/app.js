@@ -16,7 +16,7 @@ const CONFIG = {
    projets, le HUD, les fiches et le repli "noWebgl" (les six films en cartes)
    restent la. Seule la scene 3D disparait.
    (Three.js vient du CDN ; sans lui, le repli "noWebgl" prend le relais.) */
-const HAS_THREE = (typeof THREE !== "undefined");
+const HAS_THREE = (typeof window !== "undefined" && typeof window.THREE !== "undefined");
 /* Les " scratchs " 3D (vecteurs, matrices, rayon) ne servent QUE dans la scene :
    camera, boucle de rendu, projections. Si Three.js manque, ils ne sont jamais
    dereferences - on les alloue donc a null plutot que de faire tomber le script
@@ -99,17 +99,26 @@ const PROJECTS = [
   },
   {
     id:"vision", num:"005", title:"Neural Vision", accent:"#8e44d8",
-    domain:"AI - Computer Vision", year:"2026", role:"ML - Python",
+    domain:"AI - Computer Vision", year:"2026", role:"Model training - Dataset - Python",
     genre:"Found footage - AI archives", duration:"88 MIN", seance:"SHOWTIME 7:00 PM",
-    tools:["Python","CNN","OpenCV"],
+    tools:["Python","CNN","Tiny SSD","OpenCV","Tkinter"],
     front:{src:"assets/Vision-1.mp4", cap:"MODEL TRAINING"},
     back:{src:"assets/Vision-2.mp4", cap:"HANDWRITING"},
-    tagline:"The machine learns to read your hand.",
-    blurb:"A triptych of visual recognition: drawn digits, handwritten text, multi-number detection. Three repos, one obsession - making AI readable for a human.",
-    headline:"'A fascinating voyage into ML'",
+    tagline:"From pixels to digits.",
+    blurb:"A progressive approach to handwritten digit recognition: from an interactive drawing interface to real-world capture, up to multi-digit detection in a single image.",
+    headline:"'Three projects, one question: can a machine read?'",
     sections:[
-      {h:"THE THREE REPOS", list:["Drawing_Number_Recognition: draw a digit, the model reads it.","Hand_Written_Recognition: handwritten text.","MultiNumbersDetection: several numbers in one image."]},
-      {h:"TECH NOTES", p:"Training the model (confidence feedback, examples, teaching errors) matters as much as its score."},
+      {h:"01 — DRAW & PREDICT", p:"Built a CNN trained on the MNIST dataset to recognize digits drawn on a Tkinter interface. Image preprocessing was implemented to match the format expected by the model, achieving strong recognition results."},
+      {h:"02 — REAL-WORLD RECOGNITION", p:"Extended the system to recognize handwritten digits on paper using images captured with a phone and processed with OpenCV. The existing CNN was reused, with additional preprocessing to handle real-world images."},
+      {h:"03 — MULTI-DIGIT DETECTION", p:"Developed a custom dataset and combined a Tiny SSD object detection model, anchor boxes, and the CNN classifier to locate and recognize multiple handwritten digits in a single image. Results were more limited due to the small size of the custom dataset."},
+      {h:"HOW IT WORKS", flowchart:'steps', steps:[
+        {t:"USER INPUT",        d:"Tkinter canvas or webcam frame"},
+        {t:"LOCATE THE DIGIT",  d:"Stroke bounding box, largest contour, or TinySSD detector"},
+        {t:"PREPROCESSING",     d:"Crop, square padding, 28×28 resize, MNIST normalization"},
+        {t:"CNN MODEL",         d:"2 conv + 2 dense layers, trained on MNIST with augmentation"},
+        {t:"PREDICTION",        d:"Digit displayed live, stabilized over frames"},
+      ]},
+      {h:"TECH NOTES", p:"**DRAW & PREDICT** : CNN accuracy : 99.03%, Loss : 0.0148, Epochs : 5\n**REAL-WORD RECOGNITION** : Accuracy of  80.81% on a custom dataset of 100 handwritten digit images(10 for each digits), created to test the model on real-world handwriting.\n**MULTI-DIGIT DETECTION** :20 images, 54 digits, never used in training.\n  CNN on ground-truth crops: 90.7 % (49/54, 95 % CI 80-96 %)\n  Detector recall @ IoU 0.5: 7.4 % (4/54) — AP@0.5 0.05"},
     ],
     link: CONFIG.github,
   },
@@ -156,20 +165,21 @@ const F_QUOTE   = '"Playfair Display", Georgia, serif';
 const fDisplay  = px => `${px}px ${F_DISPLAY}`;
 const fBodyFont = (w,px) => `${w} ${px}px ${F_BODY}`;
 const fQuoteFont= px => `italic ${px}px ${F_QUOTE}`;
+const fSerifFont = (weight,px) => `${weight} ${px}px ${F_QUOTE}`;
 
-function hexA(hex,a){
+function hexToRgba(hex,a){
   let h = hex.replace("#","");
   if(h.length===3) h = h.split("").map(c=>c+c).join("");
   const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
   return `rgba(${r},${g},${b},${a})`;
 }
-function shade(hex,amt){
+function shadeColor(hex,amt){
   let h=hex.replace("#","");
   if(h.length===3) h=h.split("").map(c=>c+c).join("");
   const f=v=>Math.max(0,Math.min(255,Math.round(v*(1-amt))));
   return `rgb(${f(parseInt(h.slice(0,2),16))},${f(parseInt(h.slice(2,4),16))},${f(parseInt(h.slice(4,6),16))})`;
 }
-function seedRng(seed){
+function createSeededRandom(seed){
   let s=2166136261;
   for(const ch of String(seed)){ s ^= ch.charCodeAt(0); s=Math.imul(s,16777619); }
   return ()=> { s ^= s<<13; s ^= s>>>17; s ^= s<<5; return ((s>>>0)%1000)/1000; };
@@ -311,7 +321,7 @@ function makePaper(base){
   const c = document.createElement("canvas"); c.width = PW; c.height = PH;
   const g = c.getContext("2d");
   const grd = g.createLinearGradient(0,0,0,PH);
-  grd.addColorStop(0, base); grd.addColorStop(1, shade(base, .10));
+  grd.addColorStop(0, base); grd.addColorStop(1, shadeColor(base, .10));
   g.fillStyle = grd; g.fillRect(0,0,PW,PH);
   g.globalAlpha = .05; g.strokeStyle = "#fff"; g.lineWidth = .6;
   for(let i=0;i<70;i++){
@@ -349,7 +359,7 @@ function makePaper(base){
   return c;
 }
 
-function rr(ctx,x,y,w,h,r){
+function roundedRect(ctx,x,y,w,h,r){
   ctx.beginPath();
   if(ctx.roundRect){ ctx.roundRect(x,y,w,h,r); return; }
   ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -405,6 +415,20 @@ function perforationV(ctx,x,y,h,color){
   }
   ctx.restore();
 }
+function drawAccentBands(ctx,w,h,accent){
+  ctx.fillStyle = accent; ctx.fillRect(0,0,9,h);
+  ctx.fillStyle = hexToRgba(accent,.4); ctx.fillRect(w-9,0,9,h);
+}
+function drawTicketEdges(ctx,w,h,seamX,ripColor,perforationColor){
+  ctx.fillStyle = ripColor;
+  tornTop(ctx,w,10,7);
+  tornEdge(ctx,w,h,7);
+  tornRight(ctx,w-16,h,7);
+  perforationV(ctx,seamX,26,h-52,perforationColor);
+  ctx.fillStyle = ripColor;
+  ctx.beginPath(); ctx.arc(seamX,16,9,0,Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.arc(seamX,h-16,9,Math.PI,0); ctx.fill();
+}
 function rosette(ctx,cx,cy,r,color){
   // rosette etoilee d'ornement (8 petales)
   ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
@@ -444,7 +468,7 @@ function dateStamp(ctx,x,y,r,year){
   ctx.fillText(String(year), 0, r*.38);
   ctx.restore();
 }
-function capsFill(ctx,text,x,y,{px=13,weight=700,color="#000",ls=3,align="left",baseline}){
+function fillCapsText(ctx,text,x,y,{px=13,weight=700,color="#000",ls=3,align="left",baseline}){
   ctx.save();
   ctx.font = fBodyFont(weight,px); ctx.fillStyle = color; ctx.textAlign = align;
   if(baseline) ctx.textBaseline = baseline;
@@ -465,7 +489,7 @@ function wrapLines(ctx,text,maxW){
 }
 function drawReserved(ctx,x,y,w,h,spec,accent,active){
   ctx.fillStyle = "#101014"; ctx.fillRect(x,y,w,h);
-  ctx.fillStyle = hexA(accent,.55);
+  ctx.fillStyle = hexToRgba(accent,.55);
   for(let i=0;i<5;i++){
     const xx = x+12 + i*((w-24)/5);
     ctx.fillRect(xx, y+10, 13, 8); ctx.fillRect(xx, y+h-18, 13, 8);
@@ -473,8 +497,8 @@ function drawReserved(ctx,x,y,w,h,spec,accent,active){
   ctx.save();
   ctx.translate(x+w/2, y+h/2);
   const sw = Math.min(300, w-56), sh = 124;
-  ctx.strokeStyle = hexA(accent,.8); ctx.lineWidth = 2.5;
-  rr(ctx,-sw/2,-sh/2,sw,sh,8); ctx.stroke();
+  ctx.strokeStyle = hexToRgba(accent,.8); ctx.lineWidth = 2.5;
+  roundedRect(ctx,-sw/2,-sh/2,sw,sh,8); ctx.stroke();
   ctx.fillStyle = active ? accent : "rgba(239,233,220,.85)";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = fDisplay(27);
@@ -485,7 +509,7 @@ function drawReserved(ctx,x,y,w,h,spec,accent,active){
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 function barcode(ctx,x,y,w,h,seed){
-  const r = seedRng(seed);
+  const r = createSeededRandom(seed);
   ctx.fillStyle = "#141210";
   let bx = x;
   ctx.fillRect(x,y,w*.06,h); ctx.fillRect(x+w-w*.06,y,w*.06,h);
@@ -497,7 +521,7 @@ function barcode(ctx,x,y,w,h,seed){
   }
 }
 function drawStamp(ctx,cx,cy,scale,alpha,date){
-  const r = seedRng("stamp"+date);
+  const r = createSeededRandom("stamp"+date);
   ctx.save();
   ctx.globalAlpha = clamp(alpha,0,1);
   ctx.translate(cx,cy); ctx.rotate(-0.24); ctx.scale(scale,scale);
@@ -548,7 +572,7 @@ function drawMedia(t,ctx,x,y,w,h,spec,active){
     ctx.fillStyle = "#0c0c0e"; ctx.fillRect(box.x, box.y, box.w, box.h);
     try{ ctx.drawImage(vid, box.x, box.y, box.w, box.h); }catch(_){ /* video not ready yet */ }
   } else {
-    rr(ctx,x,y,w,h,10); ctx.save(); ctx.clip();
+    roundedRect(ctx,x,y,w,h,10); ctx.save(); ctx.clip();
     try{
       if(info.kind === "missing") drawReserved(ctx,x,y,w,h,spec,t.p.accent,active);
       else if(info.kind === "video"){
@@ -569,7 +593,7 @@ function drawMedia(t,ctx,x,y,w,h,spec,active){
   }
   ctx.strokeStyle = active ? t.p.accent : "rgba(20,18,16,.35)";
   ctx.lineWidth = active ? 3 : 1.5;
-  rr(ctx, box.x, box.y, box.w, box.h, vid ? 6 : 10); ctx.stroke();
+  roundedRect(ctx, box.x, box.y, box.w, box.h, vid ? 6 : 10); ctx.stroke();
   return box;
 }
 
@@ -580,34 +604,32 @@ function drawFrontCore(t, active){
   ctx.drawImage(PAPER_LIGHT, 0, 0);
 
   const ink = "#2e2518", faded = "#6b5d47", accent = p.accent;
-  const serif = (w,px) => `${w} ${px}px "Playfair Display", Georgia, serif`;
   const seamX = 1216, cxm = 630;                 // perforation + centre du corps du billet
 
   // bandes de couleur sur les bords
-  ctx.fillStyle = accent; ctx.fillRect(0,0,9,H);
-  ctx.fillStyle = hexA(accent,.4); ctx.fillRect(W-9,0,9,H);
+  drawAccentBands(ctx, W, H, accent);
 
   // --- bandeau cinema ---
   /* Tailles de texte : le billet fait 1,5 m x 0,9 m en scene, sa texture ne grandit pas -
      c'est donc la police qui porte la lisibilite (surtout sur telephone, ou le billet en
      main ne fait que ~350 px de large). Chaque ligne est recalee juste apres. */
-  capsFill(ctx,"LUDO CINEMA - OFFICIAL BOX OFFICE", W/2, 44, {px:23,color:ink,ls:6.5,align:"center",baseline:"middle"});
-  ctx.font = serif(700,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
+  fillCapsText(ctx,"LUDO CINEMA - OFFICIAL BOX OFFICE", W/2, 44, {px:23,color:ink,ls:6.5,align:"center",baseline:"middle"});
+  ctx.font = fSerifFont(700,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
   ctx.fillText("*", 98, 46); ctx.fillText("*", W-98, 46);
   /* Les filets du bandeau s'arretent a la perforation : plus rien au-dessus de
      "SOUVENIR" sur le talon, et le trait vient mourir sur la ligne de dechirure. */
   ctx.fillStyle = ink; ctx.fillRect(60,74,seamX-60,1.6);
   ctx.fillStyle = "rgba(46,37,24,.4)"; ctx.fillRect(86,80,seamX-86,1);
-  capsFill(ctx,"No. " + p.num, 58, 118, {px:15,color:faded,ls:4.5});
+  fillCapsText(ctx,"No. " + p.num, 58, 118, {px:15,color:faded,ls:4.5});
   /* ancre a GAUCHE de la perforation (seamX-24), comme PROJECTIONIST'S STAMP au verso :
      a 14,5px la mention mesure 339px et, alignee a droite sur W-58, elle entamerait
      le talon de 13px - le filet de dechirure passerait dans les lettres. */
-  capsFill(ctx,"ADMIT ONE - ONE SEAT PER TICKET", seamX-24, 118, {px:14.5,color:faded,ls:3,align:"right"});
+  fillCapsText(ctx,"ADMIT ONE - ONE SEAT PER TICKET", seamX-24, 118, {px:14.5,color:faded,ls:3,align:"right"});
 
   // --- titre du film (impression letterpress : double passe) ---
-  ctx.font = serif(400,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
+  ctx.font = fSerifFont(400,24); ctx.textAlign = "center"; ctx.fillStyle = accent;
   ctx.fillText("PRESENTS", cxm, 150);
-  ctx.font = serif(700,82); ctx.textBaseline = "alphabetic";
+  ctx.font = fSerifFont(700,82); ctx.textBaseline = "alphabetic";
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1060);
   let ty = 222;
   tl.slice(0,2).forEach(l => {
@@ -618,7 +640,7 @@ function drawFrontCore(t, active){
   ty -= 50;                                   // trait juste sous la derniere ligne du titre
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(cxm-170, ty); ctx.lineTo(cxm+170, ty); ctx.stroke();
-  ctx.font = serif(700,21); ctx.fillStyle = accent;
+  ctx.font = fSerifFont(700,21); ctx.fillStyle = accent;
   const dl = wrapLines(ctx, p.domain.toUpperCase(), 1060);
   ctx.fillText(dl[0]||"", cxm, ty+32);
 
@@ -629,9 +651,9 @@ function drawFrontCore(t, active){
   const my = Math.min(ty + 52, 440), mh = 780 - my, mx = 60, mw = seamX - mx - 26;
   const box = drawMedia(t, ctx, mx, my, mw, mh, p.front, active);   // rectangle reel du media
   ctx.strokeStyle = "rgba(46,37,24,.5)"; ctx.lineWidth = 1.4;
-  rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();      // double cadre
+  roundedRect(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();      // double cadre
   photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");            // coins dores
-  capsFill(ctx, p.front.cap, box.x + box.w/2, box.y+box.h+26, {px:15,color:faded,ls:2,align:"center"});
+  fillCapsText(ctx, p.front.cap, box.x + box.w/2, box.y+box.h+26, {px:15,color:faded,ls:2,align:"center"});
 
   // --- mentions tapees (label + valeur, chaque valeur calee dans sa colonne) ---
   /* La legende respire sous le cadre ; les mentions descendent d'autant pour
@@ -665,34 +687,27 @@ function drawFrontCore(t, active){
   // --- bas du corps : serie + code + prix ---
   perforation(ctx, 58, 842, seamX-116, "rgba(46,37,24,.5)");
   barcode(ctx, 76, 880, 250, 40, p.num);
-  capsFill(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 936, {px:13,color:faded,ls:2});
+  fillCapsText(ctx,"SERIES " + p.num + " - BOX OFFICE 01 - SEASON 25/26", 76, 936, {px:13,color:faded,ls:2});
   const pxb = seamX-320, pyb = 852;
   ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.setLineDash([7,5]);
-  rr(ctx,pxb,pyb,246,84,6); ctx.stroke(); ctx.setLineDash([]);
-  capsFill(ctx,"PRICE", pxb+123, pyb+25, {px:14,color:faded,ls:4,align:"center",baseline:"middle"});
-  ctx.font = serif(700,46); ctx.textAlign = "center"; ctx.fillStyle = ink;
+  roundedRect(ctx,pxb,pyb,246,84,6); ctx.stroke(); ctx.setLineDash([]);
+  fillCapsText(ctx,"PRICE", pxb+123, pyb+25, {px:14,color:faded,ls:4,align:"center",baseline:"middle"});
+  ctx.font = fSerifFont(700,46); ctx.textAlign = "center"; ctx.fillStyle = ink;
   ctx.fillText("12 F", pxb+123, pyb+68);
 
   // --- talon a detacher ---
-  ctx.font = serif(700,29); ctx.textAlign = "center";
+  ctx.font = fSerifFont(700,29); ctx.textAlign = "center";
   ctx.fillStyle = ink; ctx.fillText("MOVIE", seamX+176, 96);
-  ctx.font = serif(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
-  ctx.font = serif(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
+  ctx.font = fSerifFont(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
+  ctx.font = fSerifFont(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
   rosette(ctx, seamX+176, 264, 46, ink);
-  capsFill(ctx,"PROJECT", seamX+176, 344, {px:13,color:faded,ls:3,align:"center"});
-  ctx.font = serif(700,27); ctx.fillStyle = "#c22b27"; ctx.fillText("No. " + p.num, seamX+176, 400);
+  fillCapsText(ctx,"PROJECT", seamX+176, 344, {px:13,color:faded,ls:3,align:"center"});
+  ctx.font = fSerifFont(700,27); ctx.fillStyle = "#c22b27"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "S"+p.num);
-  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:faded,ls:3,align:"center"});
+  fillCapsText(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:faded,ls:3,align:"center"});
 
   // --- dechirures + encoches ---
-  const rip = "rgba(46,37,24,.16)";
-  ctx.fillStyle = rip; tornTop(ctx, W, 10, 7);
-  ctx.fillStyle = rip; tornEdge(ctx, W, H, 7);
-  ctx.fillStyle = rip; tornRight(ctx, W-16, H, 7);
-  perforationV(ctx, seamX, 26, H-52, "rgba(46,37,24,.55)");
-  ctx.fillStyle = rip;
-  ctx.beginPath(); ctx.arc(seamX, 16, 9, 0, Math.PI); ctx.fill();      // encoche poincon haut
-  ctx.beginPath(); ctx.arc(seamX, H-16, 9, Math.PI, 0); ctx.fill();    // encoche poincon bas
+  drawTicketEdges(ctx, W, H, seamX, "rgba(46,37,24,.16)", "rgba(46,37,24,.55)");
 
   // --- tampon ---
   if(t.stampAnim > 0 || t.stampDone){
@@ -711,23 +726,21 @@ function drawBackCore(t, active){
   ctx.drawImage(PAPER_INK, 0, 0);
 
   const cream = "#efe9dc", dim = "#8b8577", accent = p.accent;
-  const serif = (w,px) => `${w} ${px}px "Playfair Display", Georgia, serif`;
   const seamX = 1216;
 
-  ctx.fillStyle = accent; ctx.fillRect(0,0,9,H);
-  ctx.fillStyle = hexA(accent,.4); ctx.fillRect(W-9,0,9,H);
+  drawAccentBands(ctx, W, H, accent);
 
   // --- en-tete verso ---
-  capsFill(ctx,"TICKET - BACK",58,54,{px:19,color:cream,ls:4});
-  capsFill(ctx,"No. " + p.num + " - LL",W-58,54,{px:17.5,color:cream,ls:3,align:"right"});
+  fillCapsText(ctx,"TICKET - BACK",58,54,{px:19,color:cream,ls:4});
+  fillCapsText(ctx,"No. " + p.num + " - LL",W-58,54,{px:17.5,color:cream,ls:3,align:"right"});
   dashedLine(ctx,58,84,seamX-116,"rgba(239,233,220,.22)",10,6);
 
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";   // ! remis a chaque redraw (sinon reste "center")
-  ctx.font = fBodyFont(700,22); ctx.fillStyle = hexA(accent,.95);
+  ctx.font = fBodyFont(700,22); ctx.fillStyle = hexToRgba(accent,.95);
   ctx.fillText("No. " + p.num + " - " + p.domain.toUpperCase(), 58, 112);
 
   // --- titre + tagline ---
-  ctx.font = serif(700,54); ctx.fillStyle = cream;
+  ctx.font = fSerifFont(700,54); ctx.fillStyle = cream;
   const tl = wrapLines(ctx, p.title.toUpperCase(), 1040);
   let ty = 178;
   tl.slice(0,2).forEach(l => { ctx.fillText(l,58,ty); ty += 56; });
@@ -742,9 +755,9 @@ function drawBackCore(t, active){
   const my = Math.min(qy + 14, 400), mh = 646 - my, mx = 58, mw = seamX - mx - 24;
   const box = drawMedia(t, ctx, mx, my, mw, mh, p.back, active);   // rectangle reel du media
   ctx.strokeStyle = "rgba(239,233,220,.35)"; ctx.lineWidth = 1.4;
-  rr(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();
+  roundedRect(ctx, box.x-7, box.y-7, box.w+14, box.h+14, 4); ctx.stroke();
   photoCorners(ctx, box.x, box.y, box.w, box.h, "#b08a3e");
-  capsFill(ctx, p.back.cap, box.x + box.w/2, box.y+box.h+30, {px:15,color:dim,ls:2,align:"center"});
+  fillCapsText(ctx, p.back.cap, box.x + box.w/2, box.y+box.h+30, {px:15,color:dim,ls:2,align:"center"});
 
   // --- synopsis tape ---
   /* Meme regle qu'au recto : le synopsis suit la legende, donc il demarre plus bas ;
@@ -765,8 +778,8 @@ function drawBackCore(t, active){
   for(const tool of p.tools){
     const tw = ctx.measureText(tool).width + 38;
     if(cx + tw > seamX - 210){ cx = 58; break; }
-    ctx.fillStyle = hexA(accent,.18);
-    rr(ctx,cx,chipsY,tw,chipH,chipH/2); ctx.fill();
+    ctx.fillStyle = hexToRgba(accent,.18);
+    roundedRect(ctx,cx,chipsY,tw,chipH,chipH/2); ctx.fill();
     ctx.fillStyle = cream; ctx.fillText(tool, cx+19, chipsY+chipH/2+6);
     cx += tw + 10;
   }
@@ -779,19 +792,19 @@ function drawBackCore(t, active){
      detache des pastilles, elles-memes poussees par le synopsis. */
   perforation(ctx, 58, 878, seamX-160, "rgba(239,233,220,.3)");
   barcode(ctx, 58, 912, 200, 36, "V"+p.num);
-  capsFill(ctx,"PROJECTIONIST'S STAMP", seamX-40, 910, {px:15,color:accent,ls:2,align:"right"});
-  capsFill(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 934, {px:13,color:dim,ls:2,align:"right",weight:500});
+  fillCapsText(ctx,"PROJECTIONIST'S STAMP", seamX-40, 910, {px:15,color:accent,ls:2,align:"right"});
+  fillCapsText(ctx,"ADMITTED - PASSED AT THE SCREENING", seamX-40, 934, {px:13,color:dim,ls:2,align:"right",weight:500});
 
   // --- talon verso ---
-  ctx.font = serif(700,29); ctx.textAlign = "center";
+  ctx.font = fSerifFont(700,29); ctx.textAlign = "center";
   ctx.fillStyle = cream; ctx.fillText("MOVIE", seamX+176, 96);
-  ctx.font = serif(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
-  ctx.font = serif(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
+  ctx.font = fSerifFont(700,34); ctx.fillText("EXPLORE", seamX+176, 160);
+  ctx.font = fSerifFont(700,34); ctx.fillText("A NEW WORLD", seamX+176, 194);
   rosette(ctx, seamX+176, 264, 46, "rgba(239,233,220,.7)");
-  capsFill(ctx,"PROJECT", seamX+176, 344, {px:13,color:dim,ls:3,align:"center"});
-  ctx.font = serif(700,27); ctx.fillStyle = "#c97a72"; ctx.fillText("No. " + p.num, seamX+176, 400);
+  fillCapsText(ctx,"PROJECT", seamX+176, 344, {px:13,color:dim,ls:3,align:"center"});
+  ctx.font = fSerifFont(700,27); ctx.fillStyle = "#c97a72"; ctx.fillText("No. " + p.num, seamX+176, 400);
   barcode(ctx, seamX+104, 856, 132, 34, "V"+p.num);
-  capsFill(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:dim,ls:3,align:"center"});
+  fillCapsText(ctx,"KEEP THIS", seamX+176, 928, {px:13,color:dim,ls:3,align:"center"});
 
   // --- dechirures + encoches ---
   const rip = "rgba(0,0,0,.32)";
@@ -1048,8 +1061,8 @@ function texAwning(){
 function texSignSmall(){
   // plaque " BOX OFFICE "
   return texCanvas(1200,168,(g)=>{
-    g.fillStyle = "#14110c"; rr(g,6,6,1188,156,10); g.fill();
-    g.strokeStyle = "#c9a54e"; g.lineWidth = 3; rr(g,15,15,1170,138,7); g.stroke();
+    g.fillStyle = "#14110c"; roundedRect(g,6,6,1188,156,10); g.fill();
+    g.strokeStyle = "#c9a54e"; g.lineWidth = 3; roundedRect(g,15,15,1170,138,7); g.stroke();
     g.fillStyle = "#e6c46a";
     g.font = '700 52px "Playfair Display", Georgia, serif';
     g.textAlign = "center"; g.textBaseline = "middle";
@@ -1087,8 +1100,8 @@ function texCurtain(){
 function texTarifs(){
   // tableau des prix de la caisse (bandeau large, centre sur la facade du comptoir)
   return texCanvas(1024,260,(g)=>{
-    g.fillStyle = "#14110c"; rr(g,6,6,1012,248,14); g.fill();
-    g.strokeStyle = "#c9a54e"; g.lineWidth = 5; rr(g,18,18,988,224,9); g.stroke();
+    g.fillStyle = "#14110c"; roundedRect(g,6,6,1012,248,14); g.fill();
+    g.strokeStyle = "#c9a54e"; g.lineWidth = 5; roundedRect(g,18,18,988,224,9); g.stroke();
     g.textBaseline = "middle";
     g.textAlign = "center";
     g.fillStyle = "#e6c46a"; g.font = '700 52px "Playfair Display", Georgia, serif';
@@ -1773,15 +1786,15 @@ function makeCesarStatue(title, sub){
     const c0 = Math.cos(a0), s0 = Math.sin(a0);
     const sq = 1/Math.pow(Math.pow(Math.abs(c0),3.9) + Math.pow(Math.abs(s0),3.9), 1/3.9);
     const prof = HW*(1 + .13*Math.sin(Math.PI*Math.min(1, t*1.05)) - .07*t*t);
-    const rr = prof*sq + d;
+    const radius = prof*sq + d;
     let vy = t*H - H/2;
     if(t > .84){                                        // sommet dechiquete : les ornements debordent
       const u = (t-.84)/.16, sm = u*u*(3-2*u);
       vy += sm*(.0110*Math.sin(a*3.7 + 1.2) + .0056*Math.sin(a*7.3 - .5) - .0042);
     }
-    return { x:c0*rr + .0068*Math.sin(t*2.5 + .3),      // la colonne se courbe en montant
+    return { x:c0*radius + .0068*Math.sin(t*2.5 + .3),  // la colonne se courbe en montant
              y:vy,
-             z:s0*rr + .0038*Math.sin(t*1.9 - 1.1), d };
+             z:s0*radius + .0038*Math.sin(t*1.9 - 1.1), d };
   };
   const geo = new THREE.CylinderGeometry(1, 1, H, 84, 56, false);
   const p = geo.attributes.position;
@@ -1844,8 +1857,8 @@ function makeCesarStatue(title, sub){
   // 1) rosace ecrasee (extrusion d'une fleur a 8 lobes, biseautee) : vrai ExtrudeGeometry
   const floret = new THREE.Shape();
   for(let i=0;i<=16;i++){
-    const ang = i/16*Math.PI*2, rr = (i % 2) ? .0030 : .0072;
-    const px = Math.cos(ang)*rr, py = Math.sin(ang)*rr;
+    const ang = i/16*Math.PI*2, radius = (i % 2) ? .0030 : .0072;
+    const px = Math.cos(ang)*radius, py = Math.sin(ang)*radius;
     if(i === 0) floret.moveTo(px, py); else floret.lineTo(px, py);
   }
   const floretGeo = new THREE.ExtrudeGeometry(floret, {depth:.0038, bevelEnabled:true, bevelSize:.0011, bevelThickness:.0011, bevelSegments:2, curveSegments:2});
@@ -3857,10 +3870,26 @@ function openDetail(p){
   let body = p.blurb ? `<h5>SYNOPSIS</h5><p>${p.blurb}</p>` : "";
   body += p.sections.map(s => {
     if(s.flowchart) {
-      if(s.flowchart === 'vertical') {
-        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="WeatherApp flowchart vertical"><div class="flow-v"><div class="flow-node flow-node--black"><div class="flow-step">USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><defs><marker id="arrFlow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--violet"><div class="flow-step">API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--violet"><div class="flow-step">DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--decision"><div class="flow-step">DECISION</div><div class="flow-label">Data retrieved successfully ?</div></div></div><div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44"><defs><marker id="arrSplit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#arrSplit)" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#arrSplit)" /></svg></div><div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">No</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><defs><marker id="arrBranch" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--err"><div class="flow-step">ERROR HANDLING</div><div class="flow-label">Manage request or data errors</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">Yes</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--ok"><div class="flow-step">WEATHER DATA</div><div class="flow-label">Current conditions and multi-day forecast</div></div></div></div><div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><defs><marker id="arrMerge" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#arrMerge)" /></svg></div><div class="flow-v-end"><div class="flow-node flow-node--ok"><div class="flow-step">USER INTERFACE</div><div class="flow-label">Display weather information</div></div></div></div>`;
+      if(s.flowchart === 'steps') {
+        const steps = s.steps || [];
+        const flowDefs = `<defs><marker id="arrFlowSteps" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs>`;
+        const flowNode = (step, i) => {
+          const last = i === steps.length - 1;
+          const cls = i === 0
+            ? "flow-node flow-node--start"
+            : last
+              ? "flow-node flow-node--end flow-node--final"
+              : "flow-node flow-node--accent";
+          return `<div class="${cls}"><div class="flow-step">Step ${i+1} — ${step.t}</div><div class="flow-label">${step.d}</div></div>`;
+        };
+        const flowArrow = first => `<div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28">${first ? flowDefs : ""}<path d="M6 0 L6 22" marker-end="url(#arrFlowSteps)" /></svg></div>`;
+        const flowV = steps.map((step, i) => flowNode(step, i) + (i < steps.length - 1 ? flowArrow(i === 0) : "")).join("");
+        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="${p.title} pipeline"><div class="flow-v flow-v--steps">${flowV}</div></div>`;
       }
-      return `<h5>${s.h}</h5><div class="flowchart" role="group" aria-label="WeatherApp flowchart"><div class="flow-row flow-row--main"><div class="flow-node"><div class="flow-step">Step 1 — USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 2 — API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 3 — DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node"><div class="flow-step">Step 4 — SUCCESS CHECK</div><div class="flow-label">Data retrieved successfully?</div></div></div><div class="flow-branches"><svg class="flow-branch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="0" x2="50" y2="0" /><line x1="50" y1="0" x2="50" y2="28" /><line x1="50" y1="28" x2="100" y2="28" /><line x1="50" y1="0" x2="50" y2="72" /><line x1="50" y1="72" x2="100" y2="72" /></svg><div class="flow-branch"><div class="flow-branch-label">Yes</div><div class="flow-node flow-node--ok"><div class="flow-label">WEATHER DATA</div><div class="flow-sub">Current conditions and multi-day forecast</div></div></div><div class="flow-branch"><div class="flow-branch-label">No</div><div class="flow-node flow-node--err"><div class="flow-label">ERROR HANDLING</div><div class="flow-sub">Manage request or data errors</div></div></div></div><div class="flow-merge"><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg viewBox="0 0 12 48"><path d="M6 0V42M1 42L6 47L11 42" /></svg></div><div class="flow-node flow-node--end"><div class="flow-label">USER INTERFACE</div><div class="flow-sub">Display weather information</div></div></div></div>`;
+      if(s.flowchart === 'vertical') {
+        return `<h5>${s.h}</h5><div class="flowchart flowchart--vert" role="group" aria-label="WeatherApp flowchart vertical"><div class="flow-v"><div class="flow-node flow-node--black"><div class="flow-step">USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><defs><marker id="arrFlow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg class="flow-arrow-svg" viewBox="0 0 12 28"><path d="M6 0 L6 22" marker-end="url(#arrFlow)" /></svg></div><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">DECISION</div><div class="flow-label">Data retrieved successfully ?</div></div></div><div class="flow-split-wrap" aria-hidden="true"><svg class="flow-split-svg" width="100%" height="44"><defs><marker id="arrSplit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="50%" y1="0" x2="50%" y2="16" /><line x1="50%" y1="16" x2="25%" y2="16" /><line x1="50%" y1="16" x2="75%" y2="16" /><line x1="25%" y1="16" x2="25%" y2="38" marker-end="url(#arrSplit)" /><line x1="75%" y1="16" x2="75%" y2="38" marker-end="url(#arrSplit)" /></svg></div><div class="flow-v-branch-row"><div class="flow-v-branch"><div class="flow-pill flow-pill--no">No</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><defs><marker id="arrBranch" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">ERROR HANDLING</div><div class="flow-label">Manage request or data errors</div></div></div><div class="flow-v-branch"><div class="flow-pill flow-pill--yes">Yes</div><div class="flow-branch-conn" aria-hidden="true"><svg class="flow-branch-svg" width="12" height="18"><line x1="6" y1="0" x2="6" y2="14" marker-end="url(#arrBranch)" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">WEATHER DATA</div><div class="flow-label">Current conditions and multi-day forecast</div></div></div></div><div class="flow-merge-wrap" aria-hidden="true"><svg class="flow-merge-svg" width="100%" height="44"><defs><marker id="arrMerge" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" /></marker></defs><line x1="25%" y1="0" x2="25%" y2="16" /><line x1="75%" y1="0" x2="75%" y2="16" /><line x1="25%" y1="16" x2="75%" y2="16" /><line x1="50%" y1="16" x2="50%" y2="38" marker-end="url(#arrMerge)" /></svg></div><div class="flow-v-end"><div class="flow-node flow-node--final"><div class="flow-step">USER INTERFACE</div><div class="flow-label">Display weather information</div></div></div></div>`;
+      }
+      return `<h5>${s.h}</h5><div class="flowchart" role="group" aria-label="WeatherApp flowchart"><div class="flow-row flow-row--main"><div class="flow-node flow-node--black"><div class="flow-step">Step 1 — USER INPUT</div><div class="flow-label">Search a city</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">Step 2 — API REQUEST</div><div class="flow-label">Fetch weather data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent"><div class="flow-step">Step 3 — DATA PROCESSING</div><div class="flow-label">Parse, transform and validate data</div></div><div class="flow-arrow" aria-hidden="true"><svg viewBox="0 0 48 12"><path d="M0 6H42M42 1L47 6L42 11" /></svg></div><div class="flow-node flow-node--accent" style="border-style:dashed"><div class="flow-step">Step 4 — SUCCESS CHECK</div><div class="flow-label">Data retrieved successfully?</div></div></div><div class="flow-branches"><svg class="flow-branch-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="0" x2="50" y2="0" /><line x1="50" y1="0" x2="50" y2="28" /><line x1="50" y1="28" x2="100" y2="28" /><line x1="50" y1="0" x2="50" y2="72" /><line x1="50" y1="72" x2="100" y2="72" /></svg><div class="flow-branch"><div class="flow-branch-label">Yes</div><div class="flow-node flow-node--accent"><div class="flow-label">WEATHER DATA</div><div class="flow-sub">Current conditions and multi-day forecast</div></div></div><div class="flow-branch"><div class="flow-branch-label">No</div><div class="flow-node flow-node--accent"><div class="flow-label">ERROR HANDLING</div><div class="flow-sub">Manage request or data errors</div></div></div></div><div class="flow-merge"><div class="flow-arrow flow-arrow--down" aria-hidden="true"><svg viewBox="0 0 12 48"><path d="M6 0V42M1 42L6 47L11 42" /></svg></div><div class="flow-node flow-node--final"><div class="flow-label">USER INTERFACE</div><div class="flow-sub">Display weather information</div></div></div></div>`;
     }
     if(s.list) {
       return `<h5>${s.h}</h5><ul>${s.list.map(li => `<li>${li}</li>`).join("")}</ul>`;
@@ -4087,14 +4116,39 @@ async function boot(){
   await Promise.all([assets, plates, fonts]);
   if(buildStarted) return; buildStarted = true;
   try{
+    if(typeof window === "undefined" || typeof window.THREE === "undefined"){
+      throw new Error("THREE missing");
+    }
     initHud();
     buildProjectList();
     buildNoWebgl();
+    try{
+      const canvas = document.getElementById('stage');
+      if(canvas){
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if(!gl) throw new Error("WebGL missing");
+      }
+    }catch(glErr){
+      throw glErr;
+    }
     buildScene();
   }catch(e){
     // une etape a echoue (3D, HUD...) : on n'expose pas une scene inutilisable,
     console.error("[box office] boot step failed", e);
-    if(noWebgl) noWebgl.hidden = false;
+    if(noWebgl){
+      noWebgl.hidden = false;
+      const list = document.getElementById('noWebglList');
+      if(list && typeof buildNoWebglList === 'function'){
+        try{ buildNoWebglList(list); }catch(_){}
+      }
+    }
+    if(document.body){
+      document.body.removeAttribute('data-loading');
+      document.body.removeAttribute('aria-busy');
+    }
+    if(typeof loaderDone !== 'undefined') loaderDone = true;
+    const loader = document.getElementById('loader');
+    if(loader){ loader.style.opacity='0'; loader.style.visibility='hidden'; loader.style.pointerEvents='none'; }
   }finally{
     /* QUOI QU'IL ARRIVE, la barre inferieure est visible : c'est ELLE qui porte la
        LISTE des projets (et l'invite " SCROLL TO CHOOSE A TICKET "). Si la scene 3D

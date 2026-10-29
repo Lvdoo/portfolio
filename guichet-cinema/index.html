@@ -7,12 +7,26 @@
 <meta name="theme-color" content="#0b0b0c" />
 <title>LUDOVIC LI - The Box Office - Cinema Portfolio</title>
 <meta name="description" content="Interactive 3D cinema portfolio by Ludovic LI, Creative Developer. The box office: six tickets on the counter - pick one up, spin it, stamp it to reveal each film-project in 3D." />
+<link rel="canonical" href="https://portfolio-guichet-cinema.vercel.app/" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="LUDOVIC LI - The Box Office - Cinema Portfolio" />
+<meta property="og:description" content="Interactive 3D cinema portfolio by Ludovic LI, Creative Developer. The box office: six tickets on the counter - pick one up, spin it, stamp it to reveal each film-project in 3D." />
+<meta property="og:url" content="https://portfolio-guichet-cinema.vercel.app/" />
+<meta property="og:image" content="https://portfolio-guichet-cinema.vercel.app/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="en_US" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="LUDOVIC LI - The Box Office - Cinema Portfolio" />
+<meta name="twitter:description" content="Interactive 3D cinema portfolio by Ludovic LI, Creative Developer. The box office: six tickets on the counter - pick one up, spin it, stamp it to reveal each film-project in 3D." />
+<meta name="twitter:image" content="https://portfolio-guichet-cinema.vercel.app/assets/og-image.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
 <!-- bump ?v= (same number for both files) whenever styles.css / app.js changes, to force a reload -->
-<link rel="stylesheet" href="styles.css?v=114" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230b0b0c'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'>G</text></svg>" />
+<link rel="stylesheet" href="styles.css?v=118" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230b0b0c'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle' fill='%23e03131' font-family='Arial Black'%3ELL%3C/text%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%230b0b0c'/%3E%3Ctext x='90' y='126' font-size='104' text-anchor='middle' fill='%23e03131' font-family='Arial Black'%3ELL%3C/text%3E%3C/svg%3E" />
 </head>
 <body data-loading="true" aria-busy="true">
 
@@ -84,7 +98,7 @@
   <section id="about" class="about panel">
     <div class="panel-top">
       <span>ROOM 01 * PROJECTION</span>
-      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
+      <button type="button" class="dnav-btn dnav-close" data-close>CLOSE &#10005;</button>
       <span class="panel-stamp" aria-hidden="true">CREW</span>
     </div>
     <div class="panel-body">
@@ -130,7 +144,7 @@
   <section id="contact" class="contact panel">
     <div class="panel-top">
       <span>ROOM 02 * TILL</span>
-      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
+      <button type="button" class="dnav-btn dnav-close" data-close>CLOSE &#10005;</button>
       <span class="panel-stamp" aria-hidden="true">TILL</span>
     </div>
     <div class="panel-body">
@@ -203,7 +217,7 @@
       <button type="button" class="dnav-btn" id="dNext" aria-label="Next ticket">&#9654;</button>
       <span id="dRoom">ROOM 01 * SCREENING</span>
       <span class="detail-stamp" aria-hidden="true">ADMITTED</span>
-      <button type="button" class="dnav-btn dnav-close" data-close>FERMER &#10005;</button>
+      <button type="button" class="dnav-btn dnav-close" data-close>CLOSE &#10005;</button>
     </div>
     <div class="detail-scroll" id="detailScroll">
       <header class="detail-poster">
@@ -222,8 +236,8 @@
 <noscript><p style="padding:80px 20px;text-align:center">This portfolio needs JavaScript. The project cards stay readable in the source code.</p></noscript>
 
 <!-- Three.js (UMD build: works even on double-click, no server) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="app.js?v=114"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" crossorigin="anonymous"></script>
+<script src="app.js?v=118"></script>
 </body>
 </html>
 
