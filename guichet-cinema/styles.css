@@ -293,6 +293,15 @@ body.booth-closed .stamp-meta{opacity:0;visibility:hidden}
    (erreur JS, cache ancien), un billet en main doit QUAND MEME reveler le bouton. */
 body.hand #stampBtn{opacity:1;visibility:visible;transform:none;pointer-events:auto}
 body[data-loading="true"]:not(.hand) #stampBtn{opacity:0;visibility:hidden;pointer-events:none}
+/* Les deux reperes (" SCROLL TO CHOOSE A TICKET " / " DRAG TO SPIN ") et le bouton
+   STAMP n'ont de sens que DEVANT le guichet (la scene 3D). Des qu'un panneau plein
+   ecran (A propos / Contact) ou une fiche film recouvre la scene, ils disparaissent.
+   Place APRES body.hand : sinon un billet en main ferait reapparaitre le STAMP
+   par-dessus le panneau. */
+body.panel-open .stamp-meta,
+body.detail-open .stamp-meta{opacity:0;visibility:hidden}
+body.panel-open #stampBtn,
+body.detail-open #stampBtn{opacity:0;visibility:hidden;pointer-events:none}
 body:not(.hand) .stamp-title{color:var(--gold)}    /* l'invite " SCROLL TO CHOOSE A TICKET " est doree */
 
 /* -- invite " sonnez la cloche " : guichet ferme, seule la cloche est eclairee.

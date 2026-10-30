@@ -3852,6 +3852,7 @@ function figureHtml(spec){
 function openDetail(p){
   if(!p) return;
   detailOpen = true;
+  document.body.classList.add("detail-open");     // masque les invites du guichet
   detailSheet.style.setProperty("--accent", p.accent);
   $("#dRoom").textContent = `${ROOMS[p.id]} * SCREENING`;
   const dIdx = ORDER.indexOf(p.id);
@@ -3949,6 +3950,7 @@ function openDetail(p){
 }
 function closeDetail(){
   detailOpen = false;
+  document.body.classList.remove("detail-open");  // les invites du guichet reviennent
   detail.classList.remove("open"); detail.setAttribute("aria-hidden","true");
   document.body.style.overflow = "";
   updateProjectListActive();
