@@ -1973,7 +1973,11 @@ body:not(.hand) .stamp-title {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: var(--bar) 9px;
+  /* Reserve the top AND bottom letterbox bars: the panel sits UNDER the fixed
+     black bars, so its scroll area must stop above the bottom bar instead of
+     continuing behind it (otherwise the last lines can never be scrolled into
+     view). */
+  padding: var(--bar) 9px calc(var(--bar) + var(--sab));
   border: 0;
   color: var(--creme);
   background-color: var(--paper); /* repli si color-mix() absent */
@@ -2094,14 +2098,14 @@ body:not(.hand) .stamp-title {
   border: 1px dashed var(--dash);
 }
 /* =============================================================
-   PAS DE SCROLL DANS LES PANNEAUX
-   Tout doit tenir entre les deux bandes noires. Les tailles sont
-   indexees sur la HAUTEUR de la fenetre (vh) : plancher pour les
-   petits ecrans, plafond = la taille pleine echelle d'origine pour
-   les grands. Sur un ecran court tout se resserre au lieu de
-   defiler ; le reste d'espace est reparti haut/bas (donc jamais de
-   grand vide en bas). overflow:auto ne sert plus que de secours
-   pour les fenetres vraiment minuscules.
+   HAUTEUR DES PANNEAUX / DEFILEMENT
+   Les tailles sont indexees sur la HAUTEUR de la fenetre (vh) :
+   plancher pour les petits ecrans, plafond = la taille pleine
+   echelle d'origine pour les grands. Sur un ecran court tout se
+   resserre ; si le contenu depasse malgre tout, .panel-body defile.
+   Le panneau reserve la hauteur des deux bandes noires (haut ET bas)
+   pour que la fin du contenu puisse toujours remonter au-dessus de
+   la bande inferieure fixe.
    ============================================================= */
 .panel-top {
   padding: clamp(9px, 1.5vh, 20px) clamp(18px, 4vw, 54px);
@@ -2265,7 +2269,7 @@ summary {
   padding-right: max(clamp(18px, 5vw, 70px), var(--sar));
 }
 .panel {
-  padding: calc(var(--bar) + var(--sat)) max(9px, var(--sar)) var(--sab) max(9px, var(--sal));
+  padding: calc(var(--bar) + var(--sat)) max(9px, var(--sar)) calc(var(--bar) + var(--sab)) max(9px, var(--sal));
 }
 .panel-top {
   padding-left: max(clamp(18px, 4vw, 54px), var(--sal));
