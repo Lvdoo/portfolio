@@ -1,0 +1,151 @@
+/* =============================================================
+   SIDE PROJECTS - panneau plein ecran
+   Meme DA que les panneaux A propos / Contact : papier creme,
+   encre sepia, barre haute fixe. Aucune regle existante modifiee.
+   ============================================================= */
+
+#sideprojects .section-head {
+  margin-bottom: clamp(18px, 3vh, 34px);
+}
+
+.side-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: clamp(14px, 2vw, 24px);
+  width: 100%;
+}
+
+/* carte : un petit billet de papier pose sur le panneau, avec sa bande accent */
+.side-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--paper-hi), var(--paper));
+  box-shadow:
+    0 0 0 5px rgba(46, 37, 24, 0.06),
+    0 22px 48px -24px rgba(20, 16, 10, 0.6);
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 0.25s,
+    box-shadow 0.25s;
+}
+
+.side-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent) 0 70%, color-mix(in srgb, var(--accent) 38%, transparent));
+  pointer-events: none;
+}
+
+.side-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 5px rgba(46, 37, 24, 0.08),
+    0 28px 56px -24px rgba(20, 16, 10, 0.68);
+}
+
+/* visuel de la carte : image fournie, ou numero de bobine dans la DA du site */
+.side-card-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-bottom: 1px dashed var(--dash);
+  background: var(--paper2);
+}
+
+.side-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.side-card-media--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+    repeating-linear-gradient(90deg, transparent 0 17px, var(--noir2) 17px 18px),
+    var(--paper2);
+}
+
+.side-card-num {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 7vw, 88px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--edge);
+  opacity: 0.78;
+}
+
+.side-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: clamp(16px, 2vw, 24px);
+}
+
+.side-card-kicker {
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  color: var(--rouge);
+}
+
+.side-card h3 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.4vw, 32px);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--creme);
+}
+
+.side-card-desc {
+  margin: 10px 0 14px;
+  font-size: clamp(13px, 1.5vh, 14.5px);
+  line-height: 1.55;
+  color: var(--creme-dim);
+}
+
+/* tags : on reprend .chips, en les rendant visibles hors de l'ecran " skills " */
+.side-card-tags {
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.side-card-tags span {
+  opacity: 1;
+  transform: none;
+}
+
+.side-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px dashed var(--dash);
+}
+
+/* meme breakpoint que le reste du site */
+@media (max-width: 700px) {
+  .side-projects-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .side-card-media {
+    aspect-ratio: 16 / 9;
+  }
+}
